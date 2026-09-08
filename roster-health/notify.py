@@ -58,6 +58,45 @@ class NtfyNotifier(Notifier):
         log.info("ntfy delivered to %s", endpoint)
 
 
+class GithubNotifier(Notifier):
+    """Post the digest as a comment on a GitHub issue or PR.
+
+    Lets a locally-run monitor "report back" into a PR that Claude Code is
+    watching (a new comment there wakes the watching session). Needs
+    ``GITHUB_TOKEN`` in the env (a fine-grained token with issues:write /
+    pull_requests:write on the repo) plus ``notify.github_repo`` and
+    ``notify.github_issue`` in config.
+    """
+
+    def send(self, title: str, body: str, url: str | None = None) -> None:
+        import requests
+
+        token = os.environ.get("GITHUB_TOKEN")
+        repo = self.config.github_repo
+        issue = self.config.github_issue
+        if not (token and repo and issue):
+            raise ValueError(
+                "github notifier needs GITHUB_TOKEN (env) + notify.github_repo "
+                "+ notify.github_issue (config)"
+            )
+        endpoint = f"https://api.github.com/repos/{repo}/issues/{issue}/comments"
+        comment = f"**{title}**\n\n```\n{body}\n```"
+        if url:
+            comment += f"\n\n[sources]({url})"
+        comment += "\n\n_posted automatically by the roster-health monitor_"
+        resp = requests.post(
+            endpoint,
+            json={"body": comment},
+            headers={
+                "Authorization": f"Bearer {token}",
+                "Accept": "application/vnd.github+json",
+            },
+            timeout=15,
+        )
+        resp.raise_for_status()
+        log.info("posted digest to %s#%s", repo, issue)
+
+
 class _NotImplementedNotifier(Notifier):
     provider = "?"
 
@@ -83,6 +122,7 @@ class SlackNotifier(_NotImplementedNotifier):
 _PROVIDERS = {
     "stub": StubNotifier,
     "ntfy": NtfyNotifier,
+    "github": GithubNotifier,
     "pushover": PushoverNotifier,
     "discord": DiscordNotifier,
     "slack": SlackNotifier,

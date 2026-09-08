@@ -144,11 +144,17 @@ class RosterEntry(BaseModel):
 
 
 class NotifyConfig(BaseModel):
-    provider: str = "stub"                 # stub | ntfy | pushover | discord | slack
+    provider: str = "stub"                 # stub | ntfy | github | pushover | discord | slack
     ntfy_server: str = "https://ntfy.sh"
     ntfy_topic: Optional[str] = None
+    # "github" provider posts the digest as a comment on this repo/issue (or PR),
+    # so a local run can report back into a PR that Claude Code is watching.
+    # The token is read from the GITHUB_TOKEN env var, never YAML.
+    github_repo: Optional[str] = "herggie/ken"
+    github_issue: Optional[int] = None     # PR or issue number to comment on
     # Everything credential-shaped is read from env, never YAML:
-    #   NTFY_TOKEN, PUSHOVER_TOKEN, PUSHOVER_USER, DISCORD_WEBHOOK_URL, SLACK_WEBHOOK_URL
+    #   NTFY_TOKEN, PUSHOVER_TOKEN, PUSHOVER_USER, DISCORD_WEBHOOK_URL,
+    #   SLACK_WEBHOOK_URL, GITHUB_TOKEN
     priority: str = "default"
 
 

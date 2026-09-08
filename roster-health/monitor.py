@@ -78,6 +78,10 @@ def load_config(path: Path) -> Config:
         config.notify.ntfy_topic = os.environ["NTFY_TOPIC"]
     if os.environ.get("NOTIFY_PROVIDER"):
         config.notify.provider = os.environ["NOTIFY_PROVIDER"]
+    if os.environ.get("NOTIFY_GITHUB_ISSUE"):
+        config.notify.github_issue = int(os.environ["NOTIFY_GITHUB_ISSUE"])
+    if os.environ.get("NOTIFY_GITHUB_REPO"):
+        config.notify.github_repo = os.environ["NOTIFY_GITHUB_REPO"]
     return config
 
 

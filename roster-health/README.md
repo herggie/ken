@@ -100,6 +100,41 @@ of `SWID` (keep the `{...}` braces) and `espn_s2` (long URL-encoded string).
 They're bearer credentials for your account — treat them like a password, keep
 them in `.env`/GH secrets, and rotate by re-logging-in if leaked.
 
+## Run it locally (turnkey)
+
+On your desktop (Python 3.11+):
+
+```bash
+git clone https://github.com/herggie/ken.git      # or: git pull
+cd ken/roster-health
+git checkout claude/health-monitor-setup-wu7e0b
+
+cp .env.example .env        # then edit .env: paste ESPN_SWID / ESPN_S2
+./run_local.sh --dry-run    # installs deps, prints the digest, sends nothing
+```
+
+`run_local.sh` sources `.env`, ensures deps are installed, and runs against
+`config.yaml`. Start with `--dry-run`; drop it for a real run (notifies on
+change, persists `.state/` so it only alerts on *changes* next time).
+
+Your `league_id`/`team_id` are already in `config.yaml`, so the only things
+`.env` needs for a live pull are the two cookies.
+
+## Report back to Claude Code
+
+A locally-run script can't push into a Claude Code chat directly, but it can
+comment on a PR that a Claude session is watching. Set in `.env`:
+
+```bash
+NOTIFY_PROVIDER=github
+GITHUB_TOKEN=github_pat_...      # fine-grained token, issues:write on herggie/ken
+NOTIFY_GITHUB_ISSUE=1            # PR #1
+```
+
+On a run with changes, the digest is posted as a comment on PR #1; the watching
+Claude session is woken by that comment and can respond. (For phone alerts
+instead, use `NOTIFY_PROVIDER=ntfy` with an `NTFY_TOPIC`.)
+
 ## Scheduler
 
 ### Primary: GitHub Actions (runs without your PC on)
