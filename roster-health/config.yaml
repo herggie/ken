@@ -7,7 +7,7 @@
 
 espn:
   league_id: 400979538   # from your league URL — not secret
-  team_id: 14            # your team in that league — not secret
+  team_id: 15            # your team in that league — not secret
   year: 2026
   # SWID / espn_s2 cookies are NOT here — set them via ESPN_SWID / ESPN_S2 env
   # (local .env) or GitHub Actions secrets. They activate the live roster pull.
