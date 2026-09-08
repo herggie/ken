@@ -1,0 +1,12 @@
+# Core (needed to run the Sleeper-only pipeline)
+pydantic>=2.6,<3
+PyYAML>=6.0
+requests>=2.31
+
+# RSS + HTML scraping (needed by the official-tier adapters, deliverable #4)
+feedparser>=6.0
+beautifulsoup4>=4.12
+selectolax>=0.3
+
+# ESPN private-league roster pull (deliverable #3)
+espn-api>=0.44

@@ -1,0 +1,59 @@
+# Roster Health Monitor — example config.
+#
+# Copy to config.yaml (git-ignored) and edit weekly for waivers/trades.
+# SECRETS DO NOT GO HERE. Cookies/tokens are read from the environment:
+#   ESPN_SWID, ESPN_S2, ESPN_LEAGUE_ID, ESPN_TEAM_ID
+#   NTFY_TOKEN / PUSHOVER_* / DISCORD_WEBHOOK_URL / SLACK_WEBHOOK_URL
+
+espn:
+  # Numeric league + team id. Fill in (or set via env) to enable the live
+  # roster pull; until then the 'roster:' list below is used.
+  league_id: null
+  team_id: null
+  year: 2026
+  # swid / espn_s2 intentionally omitted — set ESPN_SWID / ESPN_S2 in the env.
+
+# My roster with lineup slots so reconcile knows starters vs bench.
+# slot: QB | RB | WR | TE | FLEX | DST | K | BENCH | IR
+# Add player_id_espn to any row to skip fuzzy name matching.
+roster:
+  - { name: "Jayden Daniels",        team: WSH, position: QB,  slot: QB }
+  - { name: "Saquon Barkley",        team: PHI, position: RB,  slot: RB }
+  - { name: "Brian Robinson Jr.",    team: WSH, position: RB,  slot: RB }
+  - { name: "Terry McLaurin",        team: WSH, position: WR,  slot: WR }
+  - { name: "A.J. Brown",            team: PHI, position: WR,  slot: WR }
+  - { name: "George Kittle",         team: SF,  position: TE,  slot: TE }
+  - { name: "Jahmyr Gibbs",          team: DET, position: RB,  slot: FLEX }
+  - { name: "Christian McCaffrey",   team: SF,  position: RB,  slot: FLEX }
+  - { name: "San Francisco 49ers",   team: SF,  position: DST, slot: DST }
+  - { name: "Brandon Aubrey",        team: DAL, position: K,   slot: K }
+  - { name: "Jaylen Warren",         team: PIT, position: RB,  slot: BENCH }
+  - { name: "Rome Odunze",           team: CHI, position: WR,  slot: BENCH }
+  - { name: "Tyjae Spears",          team: TEN, position: RB,  slot: BENCH }
+  - { name: "Chuba Hubbard",         team: CAR, position: RB,  slot: BENCH }
+
+# Official team sites to watch. Empty => derived from the roster's teams.
+watch_teams: []
+
+notify:
+  provider: stub          # stub | ntfy | pushover | discord | slack
+  ntfy_server: https://ntfy.sh
+  ntfy_topic: null        # or set NTFY_TOPIC in the env
+  priority: default
+
+politeness:
+  user_agent: "roster-health-monitor/0.1 (+https://github.com/herggie/ken; personal use)"
+  default_ttl_minutes: 180
+  default_min_interval_seconds: 2.0
+  cache_dir: .cache
+  state_dir: .state
+
+# Per-source toggles. Only Sleeper is implemented so far; the official-tier
+# adapters are stubbed and stay disabled until built (brief deliverable #4).
+sources:
+  sleeper:       { enabled: true,  ttl_minutes: 1440, min_interval_seconds: 2.0 }
+  espn_public:   { enabled: false }
+  nfl_official:  { enabled: false }
+  nfl_inactives: { enabled: false }
+  team_sites:    { enabled: false }
+  news_rss:      { enabled: false }

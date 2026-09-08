@@ -1,0 +1,71 @@
+name: roster-health
+
+# Fantasy roster health monitor. Runs on a game-day-aware schedule so it
+# tightens up Sunday morning through the inactives window and stays light the
+# rest of the week. Also runnable on demand via the Actions tab.
+#
+# Required repo secrets (Settings → Secrets and variables → Actions):
+#   ESPN_SWID, ESPN_S2, ESPN_LEAGUE_ID, ESPN_TEAM_ID   (roster pull)
+#   NOTIFY_PROVIDER (e.g. "ntfy"), NTFY_TOPIC, NTFY_TOKEN (optional)
+# The roster + non-secret settings live in roster-health/config.yaml (tracked).
+
+on:
+  workflow_dispatch: {}
+  schedule:
+    # All times UTC. NFL clock ~ US Eastern (UTC-4 in season).
+    # Wed–Sat: morning + evening (practice reports, TNF pregame).
+    - cron: "0 14 * * 3,4,5,6"     # ~10:00 ET Wed–Sat
+    - cron: "0 23 * * 3,4,5,6"     # ~19:00 ET Wed–Sat
+    # Sunday: tighten through the ~90-min-pre-1pm-ET inactives window.
+    - cron: "0 13 * * 0"           # 09:00 ET
+    - cron: "0 15 * * 0"           # 11:00 ET
+    - cron: "30 15 * * 0"          # 11:30 ET — inactives start dropping
+    - cron: "0 16 * * 0"           # 12:00 ET
+    - cron: "30 16 * * 0"          # 12:30 ET — ~30 min to kickoff
+    - cron: "0 20 * * 0"           # 16:00 ET — late-window inactives
+    # Monday night pregame.
+    - cron: "0 22 * * 1"           # 18:00 ET
+
+# Avoid overlapping runs stepping on the cached state file.
+concurrency:
+  group: roster-health
+  cancel-in-progress: false
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: roster-health
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: roster-health/requirements.txt
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      # Persist last-run state between runs so we only notify on change.
+      # Cache is best-effort: a miss just means the next run re-baselines.
+      - name: Restore last-run state
+        uses: actions/cache@v4
+        with:
+          path: roster-health/.state
+          key: roster-state-${{ github.run_id }}
+          restore-keys: |
+            roster-state-
+
+      - name: Run monitor
+        env:
+          ESPN_SWID: ${{ secrets.ESPN_SWID }}
+          ESPN_S2: ${{ secrets.ESPN_S2 }}
+          ESPN_LEAGUE_ID: ${{ secrets.ESPN_LEAGUE_ID }}
+          ESPN_TEAM_ID: ${{ secrets.ESPN_TEAM_ID }}
+          NOTIFY_PROVIDER: ${{ secrets.NOTIFY_PROVIDER }}
+          NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
+          NTFY_TOKEN: ${{ secrets.NTFY_TOKEN }}
+        run: python monitor.py --config config.yaml -v
