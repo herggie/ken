@@ -106,6 +106,10 @@ The digest and every notification lead with **LINEUP ACTIONS** — any *starter*
 who is **Out / IR / Doubtful** is called out as "🚨 DO NOT START → start
 ⟨best healthy bench player at that position⟩ instead", so you never leave an
 out player in your lineup. Questionable starters stay a lower-priority "watch".
+
+Bench replacements are ranked **healthy-first, then by ESPN projected points**
+when the ESPN cookie pull is active (the pick shows `~Npts`); without cookies it
+falls back to NFL depth-chart role. FLEX holes can be filled by any RB/WR/TE.
 Combined with the game-day-aware schedule (tighter Sunday morning through the
 inactives window), this is the "don't start an inactive guy" safety net. Once
 the official `nfl_inactives` source lands (deliverable #4), the ~90-min-pre-kick

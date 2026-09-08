@@ -61,6 +61,20 @@ def _map_slot(lineup_slot: str) -> str:
     return slot
 
 
+def _projection(player) -> float | None:
+    """Best-effort ESPN projected points for ranking bench options.
+
+    espn-api exposes a per-game average projection on the Player object; fall
+    back to the season total. Attribute names have drifted across versions, so
+    probe defensively and return None if nothing usable is present.
+    """
+    for attr in ("projected_avg_points", "projected_total_points", "projected_points"):
+        val = getattr(player, attr, None)
+        if isinstance(val, (int, float)) and val > 0:
+            return float(val)
+    return None
+
+
 def fetch_roster(config: Config) -> list[RosterEntry] | None:
     """Return the live ESPN roster, or ``None`` to signal 'use config roster'."""
     espn = config.espn
@@ -101,6 +115,7 @@ def fetch_roster(config: Config) -> list[RosterEntry] | None:
                     position=position or "UNK",
                     slot=_map_slot(getattr(p, "lineupSlot", "BE")),
                     player_id_espn=str(p.playerId) if getattr(p, "playerId", None) else None,
+                    projection=_projection(p),
                 )
             )
         log.info("pulled %d players from ESPN team %s", len(entries), espn.team_id)

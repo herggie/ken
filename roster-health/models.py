@@ -137,6 +137,7 @@ class RosterEntry(BaseModel):
     position: str                          # QB/RB/WR/TE/DST/K
     slot: str                              # QB/RB/WR/TE/FLEX/DST/K/BENCH/IR
     player_id_espn: Optional[str] = None   # fill in to skip fuzzy matching
+    projection: Optional[float] = None     # ESPN projected pts (per-game avg), when available
 
     @property
     def is_starter(self) -> bool:

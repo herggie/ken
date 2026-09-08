@@ -196,12 +196,25 @@ def _eligible_positions(entry: RosterEntry) -> set[str]:
     return {entry.position.upper()}
 
 
+def _bench_label(entry: RosterEntry, status: Status) -> str:
+    """'Name', 'Name (Q)', 'Name ~14pts', 'Name (Q) ~9pts' — parens only for dinged."""
+    parts = [entry.name]
+    tag = _STATUS_TAG.get(status)
+    if tag:
+        parts.append(f"({tag})")
+    if entry.projection is not None:
+        parts.append(f"~{entry.projection:.0f}pts")
+    return " ".join(parts)
+
+
 def _bench_options(entry: RosterEntry, reports_by_key: dict, config: Config) -> list[str]:
     """Best bench replacements for a flagged starter, ranked best-first.
 
-    Ranking (no ESPN projections yet, so we use the best signals we have):
-      1. healthy (Active) before dinged;   2. NFL starters before backups;
-      3. otherwise roster order.
+    Ranking:
+      1. healthy (Active) before dinged;
+      2. higher ESPN projection first (when the ESPN pull provided one);
+      3. NFL starters before backups (fallback signal when no projection);
+      4. otherwise roster order.
     Out/IR bench players are dropped (can't replace an Out starter with one).
     """
     elig = _eligible_positions(entry)
@@ -215,15 +228,13 @@ def _bench_options(entry: RosterEntry, reports_by_key: dict, config: Config) -> 
         if status in (Status.OUT, Status.IR):
             continue  # not a viable replacement
         healthy = status == Status.ACTIVE
+        # higher projection sorts first; unprojected rosters fall back to role
+        proj_key = -b.projection if b.projection is not None else 0.0
         nfl_starter = bool(role and role.endswith("starter"))
-        scored.append((0 if healthy else 1, 0 if nfl_starter else 1, i, b, status))
+        scored.append((0 if healthy else 1, proj_key, 0 if nfl_starter else 1, i, b, status))
 
-    scored.sort(key=lambda s: (s[0], s[1], s[2]))
-    out: list[str] = []
-    for _, _, _, b, status in scored:
-        tag = _STATUS_TAG.get(status)
-        out.append(f"{b.name} ({tag})" if tag else b.name)
-    return out
+    scored.sort(key=lambda s: (s[0], s[1], s[2], s[3]))
+    return [_bench_label(b, status) for *_, b, status in scored]
 
 
 def reconcile(
