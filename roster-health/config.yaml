@@ -38,9 +38,9 @@ roster:
 watch_teams: []        # empty => derived from roster teams
 
 notify:
-  provider: stub       # stub | ntfy | pushover | discord | slack
+  provider: ntfy       # push to phone via ntfy; topic comes from NTFY_TOPIC (env/secret)
   ntfy_server: https://ntfy.sh
-  ntfy_topic: null     # or set NTFY_TOPIC in the env
+  ntfy_topic: null     # DO NOT put the topic here — set NTFY_TOPIC (it's guessable-secret)
   priority: default
 
 politeness:
