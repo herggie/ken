@@ -143,6 +143,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--config", type=Path, default=Path("config.yaml"))
     parser.add_argument("--give", required=True, help="players you'd give, comma-separated")
     parser.add_argument("--get", required=True, help="players you'd receive, comma-separated")
+    parser.add_argument("--push", action="store_true",
+                        help="also send the result to your phone via the configured notifier")
     parser.add_argument("-v", "--verbose", action="store_true")
     args = parser.parse_args(argv)
 
@@ -171,27 +173,32 @@ def main(argv: list[str] | None = None) -> int:
         r = _resolve(name, team, by_key, by_name)
         (get_recs if r else missing).append(r or name)
 
-    print("Trade Validator — facts only, not a verdict\n")
-    print("YOU GIVE:")
-    for r in give_recs:
-        print("  " + _fact(r))
-    print("\nYOU GET:")
-    for r in get_recs:
-        print("  " + _fact(r))
-
+    out: list[str] = ["Trade Validator — facts only, not a verdict", "", "YOU GIVE:"]
+    out += ["  " + _fact(r) for r in give_recs]
+    out += ["", "YOU GET:"]
+    out += ["  " + _fact(r) for r in get_recs]
     if missing:
-        print("\n⚠ Could not find (check spelling, or add a team hint like 'Name (BUF)'):")
-        for m in missing:
-            print(f"  - {m}")
+        out += ["", "⚠ Could not find (check spelling, or add a team hint like 'Name (BUF)'):"]
+        out += [f"  - {m}" for m in missing]
+    out += ["", "FACTS & FLAGS:"]
+    out += validate(give_recs, get_recs)
+    out += [
+        "",
+        "(Status/role are a live snapshot from Sleeper. This tool states facts; "
+        "the value call is yours. Projection-based value needs the ESPN pull.)",
+    ]
+    text = "\n".join(out)
+    print(text)
 
-    print("\nFACTS & FLAGS:")
-    for line in validate(give_recs, get_recs):
-        print(line)
-
-    print(
-        "\n(Status/role are a live snapshot from Sleeper. This tool states facts; "
-        "the value call is yours. Projection-based value needs the ESPN pull.)"
-    )
+    if args.push:
+        from notify import make_notifier
+        try:
+            make_notifier(config.notify, dry_run=False).send(
+                "🔁 Trade check", text, url="https://sleeper.com/"
+            )
+            print(f"\n(pushed via {config.notify.provider})")
+        except Exception as exc:  # noqa: BLE001
+            print(f"\n(push failed via {config.notify.provider}: {exc})")
     return 0
 
 
