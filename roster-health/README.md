@@ -150,6 +150,22 @@ On a run with changes, the digest is posted as a comment on PR #1; the watching
 Claude session is woken by that comment and can respond. (For phone alerts
 instead, use `NOTIFY_PROVIDER=ntfy` with an `NTFY_TOPIC`.)
 
+## Trade validator
+
+Got a trade offer? Fact-check it before you accept:
+
+```bash
+python trade.py --give "Saquon Barkley" --get "Malik Nabers, Xavier Worthy"
+# same-name players: add a team hint  ->  "Mike Williams (NYJ)"
+```
+
+It prints each player's live **status / position / depth-chart role** (from
+Sleeper) and objective flags: the **position change**, whether your **roster
+size** changes (so you know if you'll have to drop/add), and whether you're
+**acquiring or shipping a dinged player**. Names are fuzzy-matched; anything it
+can't find is listed, never silently dropped. It states facts, not a verdict —
+the value call stays yours (projection-based value needs the ESPN pull).
+
 ## Logs & troubleshooting
 
 Every run appends to **`.state/monitor.log`** (override with `--log-file`):
