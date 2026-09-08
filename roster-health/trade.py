@@ -11,6 +11,9 @@ This reports facts, not a win/lose verdict — value is yours to judge.
     python trade.py --give "Saquon Barkley" --get "Malik Nabers, Xavier Worthy"
     # disambiguate same-named players with a team hint:
     python trade.py --give "Josh Allen (BUF)" --get "Mike Williams (NYJ)"
+    # trades aren't always straight-up — add FAAB/$ and/or draft picks per side:
+    python trade.py --give "Saquon Barkley" --get "Malik Nabers" \
+        --get-faab 15 --give-picks "2027 1st"
 
 Offline demo (same firewall note as the monitor):
     SLEEPER_PLAYERS_FILE=fixtures/sleeper_players_sample.json \
@@ -97,7 +100,13 @@ def _pos_counts(records: list[StatusRecord]) -> dict[str, int]:
     return counts
 
 
-def validate(give_recs, get_recs) -> list[str]:
+def validate(
+    give_recs, get_recs,
+    give_faab: float = 0.0, get_faab: float = 0.0,
+    give_picks: list[str] | None = None, get_picks: list[str] | None = None,
+) -> list[str]:
+    give_picks = give_picks or []
+    get_picks = get_picks or []
     lines: list[str] = []
 
     # position delta
@@ -135,14 +144,39 @@ def validate(give_recs, get_recs) -> list[str]:
             "• Note: you're sending away dinged player(s): "
             + ", ".join(f"{r.player_name} ({r.status.value})" for r in dinged_out)
         )
+
+    # FAAB / money
+    if give_faab or get_faab:
+        net = get_faab - give_faab
+        if net > 0:
+            money = f"you RECEIVE ${net:.0f} FAAB net (budget goes up)"
+        elif net < 0:
+            money = f"you SPEND ${-net:.0f} FAAB net (budget goes down)"
+        else:
+            money = "FAAB is even ($0 net)"
+        lines.append(f"• Money: give ${give_faab:.0f} / get ${get_faab:.0f} FAAB → {money}")
+
+    # draft picks
+    if give_picks or get_picks:
+        pick_delta = len(get_picks) - len(give_picks)
+        arrow = f"{'+' if pick_delta > 0 else ''}{pick_delta} pick(s) net" if pick_delta else "even on pick count"
+        lines.append(
+            "• Draft picks: give [" + (", ".join(give_picks) or "none")
+            + "] / get [" + (", ".join(get_picks) or "none") + f"] → {arrow}"
+        )
+
     return lines
 
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Fantasy trade fact-checker")
     parser.add_argument("--config", type=Path, default=Path("config.yaml"))
-    parser.add_argument("--give", required=True, help="players you'd give, comma-separated")
-    parser.add_argument("--get", required=True, help="players you'd receive, comma-separated")
+    parser.add_argument("--give", default="", help="players you'd give, comma-separated")
+    parser.add_argument("--get", default="", help="players you'd receive, comma-separated")
+    parser.add_argument("--give-faab", type=float, default=0.0, help="FAAB/$ you'd send")
+    parser.add_argument("--get-faab", type=float, default=0.0, help="FAAB/$ you'd receive")
+    parser.add_argument("--give-picks", default="", help="draft picks you'd send, comma-separated (e.g. '2027 1st, 2027 3rd')")
+    parser.add_argument("--get-picks", default="", help="draft picks you'd receive, comma-separated")
     parser.add_argument("--push", action="store_true",
                         help="also send the result to your phone via the configured notifier")
     parser.add_argument("-v", "--verbose", action="store_true")
@@ -164,6 +198,8 @@ def main(argv: list[str] | None = None) -> int:
 
     give_req = _parse_list(args.give)
     get_req = _parse_list(args.get)
+    give_picks = [p.strip() for p in args.give_picks.split(",") if p.strip()]
+    get_picks = [p.strip() for p in args.get_picks.split(",") if p.strip()]
 
     give_recs, get_recs, missing = [], [], []
     for name, team in give_req:
@@ -173,15 +209,22 @@ def main(argv: list[str] | None = None) -> int:
         r = _resolve(name, team, by_key, by_name)
         (get_recs if r else missing).append(r or name)
 
+    def _side(recs, faab, picks) -> list[str]:
+        rows = ["  " + _fact(r) for r in recs]
+        if faab:
+            rows.append(f"  💵 ${faab:.0f} FAAB")
+        rows += [f"  🎟  {p}" for p in picks]
+        return rows or ["  (nothing)"]
+
     out: list[str] = ["Trade Validator — facts only, not a verdict", "", "YOU GIVE:"]
-    out += ["  " + _fact(r) for r in give_recs]
+    out += _side(give_recs, args.give_faab, give_picks)
     out += ["", "YOU GET:"]
-    out += ["  " + _fact(r) for r in get_recs]
+    out += _side(get_recs, args.get_faab, get_picks)
     if missing:
         out += ["", "⚠ Could not find (check spelling, or add a team hint like 'Name (BUF)'):"]
         out += [f"  - {m}" for m in missing]
     out += ["", "FACTS & FLAGS:"]
-    out += validate(give_recs, get_recs)
+    out += validate(give_recs, get_recs, args.give_faab, args.get_faab, give_picks, get_picks)
     out += [
         "",
         "(Status/role are a live snapshot from Sleeper. This tool states facts; "

@@ -192,6 +192,14 @@ size** changes (so you know if you'll have to drop/add), and whether you're
 can't find is listed, never silently dropped. It states facts, not a verdict —
 the value call stays yours (projection-based value needs the ESPN pull).
 
+Trades aren't always straight-up — add **FAAB/money** and/or **draft picks** on
+either side and they're factored into the summary (net FAAB, pick-count delta):
+
+```bash
+python trade.py --give "Saquon Barkley" --get "Malik Nabers" \
+    --get-faab 15 --give-picks "2027 1st, 2027 3rd"
+```
+
 ## Logs & troubleshooting
 
 Every run appends to **`.state/monitor.log`** (override with `--log-file`):
