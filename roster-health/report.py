@@ -27,7 +27,7 @@ from models import Config, Status
 from monitor import load_config
 from normalize import canonical_team, normalize_name
 from reconcile import reconcile
-from sources import sleeper
+from sources import espn_roster, sleeper
 from sources.base import PoliteSession
 
 log = logging.getLogger("roster-health.report")
@@ -68,6 +68,28 @@ def build_report(config: Config) -> str:
         if resolved.player_id_sleeper and resolved.player_id_sleeper in by_sleeper:
             return by_sleeper[resolved.player_id_sleeper]
         return by_key.get((normalize_name(entry.name), canonical_team(entry.team)))
+
+    roster_names = {normalize_name(r.name) for r in config.roster}
+    # Live free agents in the user's league (fresh each run, so week-to-week
+    # changes are picked up automatically). None when ESPN isn't configured.
+    free_agents = espn_roster.fetch_free_agents(config)
+
+    def candidates(position: str, limit: int = 5) -> tuple[list[str], bool]:
+        """(display names, is_real_league_availability)."""
+        if free_agents is not None:
+            pool = [
+                f for f in free_agents
+                if f.position.upper() == position.upper()
+                and f.status not in (Status.OUT, Status.IR)
+            ]
+            pool.sort(key=lambda f: -(f.projection or 0.0))
+            names = [
+                f.name + f" ({f.team}" + (f", ~{f.projection:.0f}pts" if f.projection else "") + ")"
+                for f in pool[:limit]
+            ]
+            return names, True
+        cands = _market(records, position, roster_names, limit)
+        return [f"{c.player_name} ({c.team})" for c in cands], False
 
     out: list[str] = [RULE, f"  WEEKLY REPORT — {len(config.roster)}-player roster", f"  {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')}"]
     if not res.ok:
@@ -115,7 +137,8 @@ def build_report(config: Config) -> str:
 
     # ---- 3. WAIVER IDEAS -------------------------------------------------
     out.append(_section("3) WAIVER IDEAS"))
-    roster_names = {normalize_name(r.name) for r in config.roster}
+    src = "your league's free agents (ESPN, live)" if free_agents is not None \
+        else "NFL starters not on your roster (approx — add ESPN cookies for real availability)"
     # A "need" = a starter who's Out/IR with no healthy bench cover at that position.
     needs: dict[str, str] = {}
     for r in digest.lineup_actions():
@@ -124,12 +147,11 @@ def build_report(config: Config) -> str:
     if not needs:
         out.append("   ✅ No urgent holes — your Out starters have healthy bench cover.")
     else:
+        out.append(f"   source: {src}")
         for pos, who in needs.items():
-            cands = _market(records, pos, roster_names)
-            names = ", ".join(f"{c.player_name} ({c.team})" for c in cands) or "none found"
-            out.append(f"   {pos} (need: {who} is out, no bench cover) → look at: {names}")
-        out.append("     (candidates are NFL starters not on your roster — verify they're")
-        out.append("      actually free in your league; true availability needs the ESPN pull)")
+            names_list, _ = candidates(pos)
+            names = ", ".join(names_list) or "none found"
+            out.append(f"   {pos} (need: {who} is out, no bench cover) → add: {names}")
 
     # ---- 4. IR MANAGEMENT ------------------------------------------------
     out.append(_section("4) IR MANAGEMENT"))
@@ -141,9 +163,9 @@ def build_report(config: Config) -> str:
             out.append("   " + r.ir_line())
         for r in ir["eligible"]:
             out.append("   " + r.ir_line())
-            pickups = _market(records, r.entry.position, roster_names)
-            names = ", ".join(f"{c.player_name} ({c.team})" for c in pickups) or "none found"
-            out.append(f"        fill the freed spot from waivers ({r.entry.position}): {names}")
+            names_list, _ = candidates(r.entry.position)
+            names = ", ".join(names_list) or "none found"
+            out.append(f"        fill the freed spot ({r.entry.position}): {names}")
 
     out.append("\n" + RULE)
     return "\n".join(out)

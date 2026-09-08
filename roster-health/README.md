@@ -164,8 +164,9 @@ Four sections in one view:
 2. **Bye-week conflicts** — upcoming weeks where 2+ starters are off, so you can
    plan waivers/trades ahead (byes come from the feed or `config.bye_weeks`).
 3. **Waiver ideas** — positions where an Out starter has no healthy bench cover,
-   with candidate NFL starters to look for (true league availability needs the
-   ESPN pull).
+   with pickups from **your ESPN league's live free agents** (ranked by ESPN
+   projection) when cookies are set; without cookies it falls back to an NFL-wide
+   approximation and labels it as such.
 4. **IR management** — players you should move to an IR slot (frees a roster
    spot; shows the bench cover + a waiver pickup for the freed spot), and
    players who've come **off** IR and must be activated.

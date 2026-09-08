@@ -24,8 +24,8 @@ from __future__ import annotations
 import logging
 import os
 
-from models import Config, RosterEntry
-from normalize import canonical_team
+from models import Config, FreeAgent, RosterEntry
+from normalize import canonical_team, normalize_status
 
 log = logging.getLogger("roster-health.espn_roster")
 
@@ -122,4 +122,45 @@ def fetch_roster(config: Config) -> list[RosterEntry] | None:
         return entries or None
     except Exception as exc:  # noqa: BLE001 — ESPN API is unofficial; never crash the run
         log.warning("ESPN roster pull failed (%s); using config roster", exc)
+        return None
+
+
+def fetch_free_agents(config: Config, size: int = 75) -> list[FreeAgent] | None:
+    """Return the actual free agents in the user's ESPN league, ranked by ESPN
+    projection, or ``None`` when ESPN isn't configured/reachable.
+
+    This is the real "who can I add in MY league" pool — distinct from the
+    NFL-wide approximation the report falls back to without cookies.
+    """
+    espn = config.espn
+    swid = os.environ.get("ESPN_SWID") or espn.swid
+    espn_s2 = os.environ.get("ESPN_S2") or espn.espn_s2
+    if not (espn.league_id and swid and espn_s2):
+        return None
+    try:
+        from espn_api.football import League  # lazy import
+    except ImportError:
+        return None
+    try:
+        league = League(
+            league_id=int(espn.league_id), year=int(espn.year),
+            espn_s2=espn_s2, swid=swid,
+        )
+        agents = league.free_agents(size=size)  # ESPN returns these projection-ranked
+        out: list[FreeAgent] = []
+        for p in agents:
+            position = _POS_MAP.get(getattr(p, "position", ""), getattr(p, "position", ""))
+            out.append(
+                FreeAgent(
+                    name=p.name,
+                    team=canonical_team(getattr(p, "proTeam", None)),
+                    position=position or "?",
+                    status=normalize_status(getattr(p, "injuryStatus", None)),
+                    projection=_projection(p),
+                )
+            )
+        log.info("pulled %d free agents from ESPN league %s", len(out), espn.league_id)
+        return out
+    except Exception as exc:  # noqa: BLE001
+        log.warning("ESPN free-agent pull failed (%s)", exc)
         return None

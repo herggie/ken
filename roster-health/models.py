@@ -145,6 +145,16 @@ class RosterEntry(BaseModel):
         return self.slot.upper() not in ("BENCH", "IR", "TAXI")
 
 
+class FreeAgent(BaseModel):
+    """An available player in *your* ESPN league (from League.free_agents())."""
+
+    name: str
+    team: str = "FA"
+    position: str = "?"
+    status: Status = Status.UNKNOWN
+    projection: Optional[float] = None
+
+
 class NotifyConfig(BaseModel):
     provider: str = "stub"                 # stub | ntfy | github | pushover | discord | slack
     ntfy_server: str = "https://ntfy.sh"
