@@ -10,6 +10,11 @@ official-tier sources are stubbed and get built next (see *Status* below).
 
 ---
 
+**Running it all from your phone:** see [USAGE.md](USAGE.md) — every module has
+a GitHub Actions "Run workflow" button and pushes results to your phone, with
+sample inputs to test each one. Verify ESPN cookies with the `espn-check`
+workflow (or `python check_espn.py`).
+
 ## How it works
 
 ```

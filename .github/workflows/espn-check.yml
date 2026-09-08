@@ -1,0 +1,32 @@
+name: espn-check
+
+# Verify your ESPN cookies work and push the PASS/FAIL to your phone.
+# Trigger from the GitHub app: Actions -> espn-check -> Run workflow.
+
+on:
+  workflow_dispatch: {}
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: roster-health
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: roster-health/requirements.txt
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+      - name: Check ESPN cookies
+        env:
+          ESPN_SWID: ${{ secrets.ESPN_SWID }}
+          ESPN_S2: ${{ secrets.ESPN_S2 }}
+          ESPN_LEAGUE_ID: ${{ secrets.ESPN_LEAGUE_ID }}
+          ESPN_TEAM_ID: ${{ secrets.ESPN_TEAM_ID }}
+          NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
+          NTFY_TOKEN: ${{ secrets.NTFY_TOKEN }}
+        run: python check_espn.py --config config.yaml --push -v
