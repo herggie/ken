@@ -1,0 +1,59 @@
+# Roster Health Monitor — working config (TRACKED in git).
+#
+# Holds ONLY the roster + non-secret settings. Cookies/tokens come from env:
+#   ESPN_SWID, ESPN_S2, ESPN_LEAGUE_ID, ESPN_TEAM_ID
+#   NTFY_TOKEN / PUSHOVER_* / DISCORD_WEBHOOK_URL / SLACK_WEBHOOK_URL
+# NEVER paste secrets here. Edit the roster weekly for waivers/trades and commit.
+
+espn:
+  league_id: 400979538   # from your league URL — not secret
+  team_id: 15            # your team in that league — not secret
+  year: 2026
+  # SWID / espn_s2 cookies are NOT here — set them via ESPN_SWID / ESPN_S2 env
+  # (local .env) or GitHub Actions secrets. They activate the live roster pull.
+
+# slot: QB | RB | WR | TE | FLEX | DST | K | BENCH | IR
+# Add player_id_espn to any row to skip fuzzy name matching.
+roster:
+  # Fainting Goat — Ken Shropshire (ESPN league 400979538, team 15)
+  # Starters: QB/RB/RB/WR/WR/TE/FLEX/FLEX/DST/K
+  - { name: "Jayden Daniels",        team: WSH, position: QB,  slot: QB }
+  - { name: "Christian McCaffrey",   team: SF,  position: RB,  slot: RB }
+  - { name: "Quinshon Judkins",      team: CLE, position: RB,  slot: RB }
+  - { name: "Malik Nabers",          team: NYG, position: WR,  slot: WR }
+  - { name: "Garrett Wilson",        team: NYJ, position: WR,  slot: WR }
+  - { name: "Kyle Pitts Sr.",        team: ATL, position: TE,  slot: TE }
+  - { name: "Brian Thomas Jr.",      team: JAX, position: WR,  slot: FLEX }
+  - { name: "Michael Pittman Jr.",   team: IND, position: WR,  slot: FLEX }
+  - { name: "Detroit Lions",         team: DET, position: DST, slot: DST }
+  - { name: "Jason Myers",           team: SEA, position: K,   slot: K }
+  # Bench
+  - { name: "J.K. Dobbins",          team: DEN, position: RB,  slot: BENCH }
+  - { name: "Xavier Worthy",         team: KC,  position: WR,  slot: BENCH }
+  - { name: "Brock Purdy",           team: SF,  position: QB,  slot: BENCH }
+  - { name: "Alvin Kamara",          team: "NO", position: RB,  slot: BENCH }
+  - { name: "Calvin Ridley",         team: TEN, position: WR,  slot: BENCH }
+  - { name: "Cleveland Browns",      team: CLE, position: DST, slot: BENCH }
+
+watch_teams: []        # empty => derived from roster teams
+
+notify:
+  provider: ntfy       # push to phone via ntfy; topic comes from NTFY_TOPIC (env/secret)
+  ntfy_server: https://ntfy.sh
+  ntfy_topic: null     # DO NOT put the topic here — set NTFY_TOPIC (it's guessable-secret)
+  priority: default
+
+politeness:
+  user_agent: "roster-health-monitor/0.1 (+https://github.com/herggie/ken; personal use)"
+  default_ttl_minutes: 180
+  default_min_interval_seconds: 2.0
+  cache_dir: .cache
+  state_dir: .state
+
+sources:
+  sleeper:       { enabled: true,  ttl_minutes: 1440, min_interval_seconds: 2.0 }
+  espn_public:   { enabled: false }
+  nfl_official:  { enabled: false }
+  nfl_inactives: { enabled: false }
+  team_sites:    { enabled: false }
+  news_rss:      { enabled: false }

@@ -1,0 +1,36 @@
+name: trade-check
+
+# Run a trade fact-check in the cloud (no PC needed) and push the result to
+# your phone. Trigger from the GitHub app or web: Actions -> trade-check ->
+# Run workflow, then type the players for each side.
+
+on:
+  workflow_dispatch:
+    inputs:
+      give:
+        description: "Players you'd GIVE (comma-separated)"
+        required: true
+      get:
+        description: "Players you'd GET (comma-separated)"
+        required: true
+
+jobs:
+  trade:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: roster-health
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: roster-health/requirements.txt
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+      - name: Run trade check
+        env:
+          NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
+          NTFY_TOKEN: ${{ secrets.NTFY_TOKEN }}
+        run: python trade.py --give "${{ inputs.give }}" --get "${{ inputs.get }}" --push -v

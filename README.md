@@ -2,6 +2,9 @@
 
 Operational tooling for the `ken` Kubernetes lab cluster.
 
+> **Also here:** [`roster-health/`](roster-health/) — a fantasy football roster
+> health monitor (separate project, built from [`CLAUDE_CODE_BRIEF.md`](CLAUDE_CODE_BRIEF.md)).
+
 ## scripts/k8s-triage.sh
 
 Read-only triage collector. Run it on the control-plane node; it writes a

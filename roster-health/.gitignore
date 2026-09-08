@@ -1,0 +1,18 @@
+# Secrets — cookies/tokens live in the environment, never in git.
+.env
+config.local.yaml
+
+# Runtime state / caches
+.cache/
+.state/
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+
+# NOTE: config.yaml IS tracked (it holds only the roster + non-secret settings,
+# so CI and local share one file and weekly roster edits are a normal commit).
+# Do NOT put SWID / espn_s2 / tokens in it — those come from env vars.
