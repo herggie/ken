@@ -80,9 +80,9 @@ class PlayerReport(BaseModel):
 
     @property
     def recommended_replacement(self) -> Optional[str]:
-        """First healthy (Active) bench option at this position, if any."""
+        """Best healthy (Active) bench option — the top-ranked one with no tag."""
         for b in self.bench_options:
-            if not b.endswith("(?)"):
+            if "(" not in b:
                 return b
         return None
 
@@ -180,18 +180,49 @@ class Digest(BaseModel):
         return "\n".join(out)
 
 
+_FLEX_ELIGIBLE = {"RB", "WR", "TE"}
+
+_STATUS_TAG = {
+    Status.QUESTIONABLE: "Q",
+    Status.DOUBTFUL: "D",
+    Status.UNKNOWN: "?",
+}
+
+
+def _eligible_positions(entry: RosterEntry) -> set[str]:
+    """Which bench positions can fill this starter's slot."""
+    if entry.slot.upper() == "FLEX":
+        return _FLEX_ELIGIBLE
+    return {entry.position.upper()}
+
+
 def _bench_options(entry: RosterEntry, reports_by_key: dict, config: Config) -> list[str]:
-    """Healthy bench players at the same position as a flagged starter."""
-    out: list[str] = []
-    for b in config.bench:
-        if b.position != entry.position:
+    """Best bench replacements for a flagged starter, ranked best-first.
+
+    Ranking (no ESPN projections yet, so we use the best signals we have):
+      1. healthy (Active) before dinged;   2. NFL starters before backups;
+      3. otherwise roster order.
+    Out/IR bench players are dropped (can't replace an Out starter with one).
+    """
+    elig = _eligible_positions(entry)
+    scored: list[tuple] = []
+    for i, b in enumerate(config.bench):
+        if b.position.upper() not in elig:
             continue
-        # look up the bench player's own computed status if we have it
         rep = reports_by_key.get(f"{normalize_name(b.name)}|{canonical_team(b.team)}")
         status = rep.status if rep else Status.UNKNOWN
-        if status in (Status.ACTIVE, Status.UNKNOWN):
-            label = b.name if status == Status.ACTIVE else f"{b.name} (?)"
-            out.append(label)
+        role = rep.role_note if rep else None
+        if status in (Status.OUT, Status.IR):
+            continue  # not a viable replacement
+        healthy = status == Status.ACTIVE
+        nfl_starter = bool(role and role.endswith("starter"))
+        scored.append((0 if healthy else 1, 0 if nfl_starter else 1, i, b, status))
+
+    scored.sort(key=lambda s: (s[0], s[1], s[2]))
+    out: list[str] = []
+    for _, _, _, b, status in scored:
+        tag = _STATUS_TAG.get(status)
+        out.append(f"{b.name} ({tag})" if tag else b.name)
     return out
 
 
