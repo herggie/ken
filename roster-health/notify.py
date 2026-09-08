@@ -44,9 +44,17 @@ class NtfyNotifier(Notifier):
     def send(self, title: str, body: str, url: str | None = None) -> None:
         import requests
 
-        if not self.config.ntfy_topic:
-            raise ValueError("notify.ntfy_topic is required for the ntfy provider")
-        endpoint = f"{self.config.ntfy_server.rstrip('/')}/{self.config.ntfy_topic}"
+        topic = self.config.ntfy_topic
+        if not topic:
+            raise ValueError(
+                "ntfy topic missing — set NTFY_TOPIC (env / GH secret)"
+            )
+        if any(c.isspace() for c in topic):
+            raise ValueError(
+                f"ntfy topic {topic!r} contains spaces — topics must be URL-safe "
+                "(letters, digits, - and _ only), e.g. 'starter-changes-9f3k2x'"
+            )
+        endpoint = f"{self.config.ntfy_server.rstrip('/')}/{topic}"
         headers = {"Title": title, "Priority": self.config.priority}
         token = os.environ.get("NTFY_TOKEN")
         if token:

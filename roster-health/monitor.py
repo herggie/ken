@@ -113,6 +113,8 @@ def main(argv: list[str] | None = None) -> int:
                         help="re-resolve every roster player from scratch")
     parser.add_argument("--save-state", action="store_true",
                         help="persist last-run state even on --dry-run")
+    parser.add_argument("--notify-now", action="store_true",
+                        help="send the digest even if nothing changed (testing / on-demand)")
     parser.add_argument("--list-sources", action="store_true")
     parser.add_argument("-v", "--verbose", action="store_true")
     args = parser.parse_args(argv)
@@ -157,19 +159,25 @@ def main(argv: list[str] | None = None) -> int:
         print("Changes vs last run:")
         for c in changes:
             print(f"  • {c}")
+    elif args.notify_now:
+        print("No changes vs last run — sending anyway (--notify-now).")
+    else:
+        print("No changes vs last run — nothing to notify.")
+
+    if changes or args.notify_now:
         n_actions = len(digest.lineup_actions())
         if n_actions:
             title = f"🚨 LINEUP: {n_actions} starter(s) you should not start"
         else:
-            title = f"Roster Health: {len(digest.problems())} issue(s), {len(changes)} change(s)"
+            title = f"Roster Health: {len(digest.problems())} issue(s)"
+            if changes:
+                title += f", {len(changes)} change(s)"
         body = digest.short()
         notifier = make_notifier(config.notify, dry_run=args.dry_run)
         try:
             notifier.send(title, body, url="https://sleeper.com/")
         except Exception as exc:  # noqa: BLE001 — never let notify failure crash the run
             log.error("notification failed: %s", exc)
-    else:
-        print("No changes vs last run — nothing to notify.")
 
     if not args.dry_run or args.save_state:
         state.save(digest)
