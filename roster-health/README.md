@@ -184,12 +184,24 @@ Weekly lineup decisions:
 python startsit.py --config config.yaml          # add --push to send to phone
 ```
 
-For each starting slot it compares your starter against eligible bench players:
-a starter who's **Out/IR/Doubtful** → sit him, start the best eligible bench; a
-healthy bench player projected clearly higher than a healthy starter → "consider
-starting X over Y". Healthy-vs-healthy comparison needs **ESPN projections**
-(from the cookie pull); without them it flags injuries only and says so. The
-Sunday `roster-report` workflow also pushes this to your phone.
+With **ESPN projections** (from the cookie pull) it runs a full **lineup
+optimizer**: it assigns your whole roster to the lineup slots to maximize
+projected points, benches injured players, and shows the highest-scoring legal
+lineup plus the exact START/SIT changes and the point gain vs. your current
+lineup:
+
+```
+OPTIMAL LINEUP (by projected points):
+  QB    Jayden Daniels ~21pts
+  ...
+  Projected total: 123 pts  (your current lineup ~91 → +32)
+  Make these changes:
+    ▶ START J.K. Dobbins        ◀ SIT Christian McCaffrey [Out]
+```
+
+Without projections it falls back to injury-only advice (sit Out/Doubtful
+starters for a healthy bench) and says so. The Sunday `roster-report` workflow
+pushes this to your phone alongside the report.
 
 ## Trade validator
 

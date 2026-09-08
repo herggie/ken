@@ -21,6 +21,7 @@ from __future__ import annotations
 import argparse
 import logging
 import sys
+from collections import Counter
 from pathlib import Path
 
 from id_crosswalk import Crosswalk
@@ -33,7 +34,6 @@ from sources.base import PoliteSession
 log = logging.getLogger("roster-health.startsit")
 
 _FLEX_ELIGIBLE = {"RB", "WR", "TE"}
-MARGIN = 1.5  # projected-point gap before suggesting a healthy-vs-healthy swap
 
 
 def _eligible(bench: RosterEntry, slot: str) -> bool:
@@ -41,6 +41,46 @@ def _eligible(bench: RosterEntry, slot: str) -> bool:
     if slot == "FLEX":
         return bench.position.upper() in _FLEX_ELIGIBLE
     return bench.position.upper() == slot
+
+
+_UNAVAILABLE = (Status.OUT, Status.IR, Status.DOUBTFUL)
+
+
+def optimize(roster: list[RosterEntry], st: dict, config: Config):
+    """Assign players to the lineup's slots to maximize total projection.
+
+    Fills fixed position slots with the top healthy projected players, then FLEX
+    from the remaining RB/WR/TE. Optimal for standard lineups (only FLEX has
+    overlapping eligibility). Returns (chosen [(slot, player)], used id set).
+    """
+    startable = [
+        r for r in roster
+        if st[id(r)] not in _UNAVAILABLE and r.projection is not None
+    ]
+    slot_counts = Counter(s.slot.upper() for s in config.starters)
+    chosen: list[tuple[str, RosterEntry]] = []
+    used: set[int] = set()
+
+    for slot, n in slot_counts.items():
+        if slot == "FLEX":
+            continue
+        pool = sorted(
+            (p for p in startable if p.position.upper() == slot and id(p) not in used),
+            key=lambda p: -(p.projection or 0.0),
+        )
+        for p in pool[:n]:
+            chosen.append((slot, p))
+            used.add(id(p))
+
+    for _ in range(slot_counts.get("FLEX", 0)):
+        pool = sorted(
+            (p for p in startable if p.position.upper() in _FLEX_ELIGIBLE and id(p) not in used),
+            key=lambda p: -(p.projection or 0.0),
+        )
+        if pool:
+            chosen.append(("FLEX", pool[0]))
+            used.add(id(pool[0]))
+    return chosen, used
 
 
 def build(config: Config) -> str:
@@ -74,45 +114,55 @@ def build(config: Config) -> str:
         return f"{r.name} ({r.team} {r.position}){flag}{p}"
 
     out: list[str] = ["Start/Sit Analyzer", ""]
-    recs: list[str] = []
 
-    for starter in starters:
-        pool = [
-            b for b in bench
-            if _eligible(b, starter.slot) and st[id(b)] not in (Status.OUT, Status.IR)
-        ]
-        s_status = st[id(starter)]
+    if have_proj:
+        chosen, used = optimize(roster, st, config)
+        opt_total = sum((proj(p) or 0.0) for _, p in chosen)
+        # current lineup value: an Out/IR/Doubtful starter effectively scores 0
+        cur_total = sum(
+            (proj(r) or 0.0) if st[id(r)] not in _UNAVAILABLE else 0.0
+            for r in starters
+        )
+        starter_ids = {id(s) for s in starters}
+        start_new = [p for _, p in chosen if id(p) not in starter_ids]
+        sit_old = [r for r in starters if id(r) not in used]
 
-        if s_status in (Status.OUT, Status.IR, Status.DOUBTFUL):
-            # rank bench by projection (if any) else keep roster order
-            pool.sort(key=lambda b: -(proj(b) or 0.0))
-            if pool:
-                recs.append(f"🔁 SIT {tag(starter)} → START {tag(pool[0])}")
-            else:
-                recs.append(f"⚠ SIT {tag(starter)} — no healthy bench at {starter.slot}; check waivers")
-            continue
-
-        # healthy starter: only comparable if we have projections on both sides
-        if have_proj and proj(starter) is not None:
-            better = [
-                b for b in pool
-                if st[id(b)] == Status.ACTIVE and proj(b) is not None
-                and proj(b) > proj(starter) + MARGIN
-            ]
-            if better:
-                best = max(better, key=lambda b: proj(b))
-                recs.append(f"📈 CONSIDER START {tag(best)} over {tag(starter)}")
-
-    if recs:
-        out += recs
-    else:
-        out.append("✅ Lineup looks optimal — no changes recommended.")
-
-    if not have_proj:
+        out.append("OPTIMAL LINEUP (by projected points):")
+        for slot, p in chosen:
+            out.append(f"  {slot:5} {tag(p)}")
+        delta = opt_total - cur_total
         out += [
             "",
-            "(No ESPN projections yet, so this only flags injuries — it can't rank "
-            "two healthy players. Add ESPN cookies to compare by projected points.)",
+            f"  Projected total: {opt_total:.0f} pts  "
+            f"(your current lineup ~{cur_total:.0f} pts → "
+            f"{'+' if delta >= 0 else ''}{delta:.0f})",
+        ]
+        if start_new or sit_old:
+            out.append("  Make these changes:")
+            for p in start_new:
+                out.append(f"    ▶ START {tag(p)}")
+            for r in sit_old:
+                out.append(f"    ◀ SIT   {tag(r)}")
+        else:
+            out.append("  ✅ Your current lineup is already the highest-scoring one.")
+    else:
+        recs: list[str] = []
+        for starter in starters:
+            if st[id(starter)] in _UNAVAILABLE:
+                pool = sorted(
+                    (b for b in bench if _eligible(b, starter.slot) and st[id(b)] not in (Status.OUT, Status.IR)),
+                    key=lambda b: -(proj(b) or 0.0),
+                )
+                if pool:
+                    recs.append(f"🔁 SIT {tag(starter)} → START {tag(pool[0])}")
+                else:
+                    recs.append(f"⚠ SIT {tag(starter)} — no healthy bench at {starter.slot}; check waivers")
+        out += recs or ["✅ No injured starters — your lineup looks fine on health."]
+        out += [
+            "",
+            "(No ESPN projections yet, so this only flags injuries — it can't build "
+            "a higher-scoring lineup from healthy players. Add ESPN cookies to unlock "
+            "the full optimizer.)",
         ]
     return "\n".join(out)
 
