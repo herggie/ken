@@ -6,9 +6,11 @@
 # NEVER paste secrets here. Edit the roster weekly for waivers/trades and commit.
 
 espn:
-  league_id: null      # set via ESPN_LEAGUE_ID env (or here — it's not secret)
-  team_id: null        # set via ESPN_TEAM_ID env
+  league_id: 400979538   # from your league URL — not secret
+  team_id: 14            # your team in that league — not secret
   year: 2026
+  # SWID / espn_s2 cookies are NOT here — set them via ESPN_SWID / ESPN_S2 env
+  # (local .env) or GitHub Actions secrets. They activate the live roster pull.
 
 # slot: QB | RB | WR | TE | FLEX | DST | K | BENCH | IR
 # Add player_id_espn to any row to skip fuzzy name matching.
