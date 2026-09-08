@@ -176,6 +176,21 @@ the whole report through your notifier (ntfy). The `roster-report` GitHub
 Actions workflow does this automatically every Sunday morning. IR returns and
 "move to IR" nudges also ride along in the monitor's regular change alerts.
 
+## Start/Sit analyzer
+
+Weekly lineup decisions:
+
+```bash
+python startsit.py --config config.yaml          # add --push to send to phone
+```
+
+For each starting slot it compares your starter against eligible bench players:
+a starter who's **Out/IR/Doubtful** → sit him, start the best eligible bench; a
+healthy bench player projected clearly higher than a healthy starter → "consider
+starting X over Y". Healthy-vs-healthy comparison needs **ESPN projections**
+(from the cookie pull); without them it flags injuries only and says so. The
+Sunday `roster-report` workflow also pushes this to your phone.
+
 ## Trade validator
 
 Got a trade offer? Fact-check it before you accept:
