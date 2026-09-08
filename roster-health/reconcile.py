@@ -72,6 +72,34 @@ class PlayerReport(BaseModel):
         return self.status.is_problem or self.disagreement
 
     @property
+    def lineup_problem(self) -> bool:
+        """A STARTER who probably/definitely won't play — a lineup you must fix."""
+        return self.entry.is_starter and self.status in (
+            Status.DOUBTFUL, Status.OUT, Status.IR,
+        )
+
+    @property
+    def recommended_replacement(self) -> Optional[str]:
+        """First healthy (Active) bench option at this position, if any."""
+        for b in self.bench_options:
+            if not b.endswith("(?)"):
+                return b
+        return None
+
+    def action_line(self) -> str:
+        verb = "DO NOT START" if self.status in (Status.OUT, Status.IR) else "RISKY START"
+        if self.recommended_replacement:
+            fix = f" → start {self.recommended_replacement} instead"
+        elif self.bench_options:
+            fix = f" → only bench option is {self.bench_options[0]}"
+        else:
+            fix = " → NO bench option at this position — pick up a free agent"
+        return (
+            f"🚨 {verb}: {self.entry.name} ({self.entry.team} {self.entry.position}, "
+            f"{self.entry.slot}) is {self.status.value}{fix}"
+        )
+
+    @property
     def _sort_key(self) -> tuple:
         # alerts first; starters before bench; worse status first; name
         return (
@@ -108,27 +136,48 @@ class Digest(BaseModel):
     def problems(self) -> list[PlayerReport]:
         return [r for r in self.reports if r.has_alert]
 
+    def lineup_actions(self) -> list[PlayerReport]:
+        """Starters you must not leave in your lineup (Out / IR / Doubtful)."""
+        return [r for r in self.reports if r.lineup_problem]
+
     def render(self) -> str:
         lines = [
             f"Roster Health — {self.generated_at.strftime('%Y-%m-%d %H:%M UTC')}",
         ]
         probs = self.problems()
+        actions = self.lineup_actions()
         lines.append(
             f"{len(probs)} issue(s) across {len(self.reports)} rostered players."
         )
         if self.unavailable_sources:
             lines.append(f"Sources unavailable this run: {', '.join(self.unavailable_sources)}")
         lines.append("")
+        if actions:
+            lines.append("LINEUP ACTIONS — fix before kickoff:")
+            for r in actions:
+                lines.append("  " + r.action_line())
+            lines.append("")
         for r in self.reports:
             lines.append("  " + r.one_liner())
         return "\n".join(lines)
 
     def short(self) -> str:
-        """One-screen push body: problems only."""
+        """One-screen push body: lineup actions first, then the rest of the watch list."""
+        actions = self.lineup_actions()
         probs = self.problems()
-        if not probs:
+        if not actions and not probs:
             return "All clear — no roster health issues."
-        return "\n".join(r.one_liner() for r in probs)
+        out: list[str] = []
+        if actions:
+            out.append("LINEUP ACTIONS — fix before kickoff:")
+            out.extend(r.action_line() for r in actions)
+        watch = [r for r in probs if not r.lineup_problem]
+        if watch:
+            if out:
+                out.append("")
+            out.append("Watch:")
+            out.extend(r.one_liner() for r in watch)
+        return "\n".join(out)
 
 
 def _bench_options(entry: RosterEntry, reports_by_key: dict, config: Config) -> list[str]:

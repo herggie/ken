@@ -100,6 +100,17 @@ of `SWID` (keep the `{...}` braces) and `espn_s2` (long URL-encoded string).
 They're bearer credentials for your account — treat them like a password, keep
 them in `.env`/GH secrets, and rotate by re-logging-in if leaked.
 
+## Game-day lineup alerts
+
+The digest and every notification lead with **LINEUP ACTIONS** — any *starter*
+who is **Out / IR / Doubtful** is called out as "🚨 DO NOT START → start
+⟨best healthy bench player at that position⟩ instead", so you never leave an
+out player in your lineup. Questionable starters stay a lower-priority "watch".
+Combined with the game-day-aware schedule (tighter Sunday morning through the
+inactives window), this is the "don't start an inactive guy" safety net. Once
+the official `nfl_inactives` source lands (deliverable #4), the ~90-min-pre-kick
+inactives list makes it definitive.
+
 ## Run it locally (turnkey)
 
 On your desktop (Python 3.11+):

@@ -157,7 +157,11 @@ def main(argv: list[str] | None = None) -> int:
         print("Changes vs last run:")
         for c in changes:
             print(f"  • {c}")
-        title = f"Roster Health: {len(digest.problems())} issue(s), {len(changes)} change(s)"
+        n_actions = len(digest.lineup_actions())
+        if n_actions:
+            title = f"🚨 LINEUP: {n_actions} starter(s) you should not start"
+        else:
+            title = f"Roster Health: {len(digest.problems())} issue(s), {len(changes)} change(s)"
         body = digest.short()
         notifier = make_notifier(config.notify, dry_run=args.dry_run)
         try:
