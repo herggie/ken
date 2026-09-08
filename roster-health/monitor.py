@@ -116,14 +116,22 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--notify-now", action="store_true",
                         help="send the digest even if nothing changed (testing / on-demand)")
     parser.add_argument("--list-sources", action="store_true")
+    parser.add_argument("--log-file", default=None,
+                        help="append run + notification logs here (default: <state_dir>/monitor.log)")
     parser.add_argument("-v", "--verbose", action="store_true")
     args = parser.parse_args(argv)
 
-    logging.basicConfig(
-        level=logging.INFO if args.verbose else logging.WARNING,
-        format="%(asctime)s %(levelname)s %(name)s: %(message)s",
-        stream=sys.stderr,
-    )
+    # Console logging (quiet unless -v); a file handler is added once config is
+    # loaded so the state dir is known. INFO-level records go to the file even
+    # when the console is quiet, so there's always a durable trail to debug from.
+    fmt = logging.Formatter("%(asctime)s %(levelname)s %(name)s: %(message)s")
+    logger = logging.getLogger("roster-health")
+    logger.setLevel(logging.INFO)
+    logger.propagate = False
+    console = logging.StreamHandler(sys.stderr)
+    console.setLevel(logging.INFO if args.verbose else logging.WARNING)
+    console.setFormatter(fmt)
+    logger.addHandler(console)
 
     if args.list_sources:
         for name, fetch in SOURCES.items():
@@ -132,6 +140,19 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     config = load_config(args.config)
+
+    # Now that we know the state dir, start appending to the log file.
+    log_path = Path(args.log_file) if args.log_file else Path(config.politeness.state_dir) / "monitor.log"
+    try:
+        log_path.parent.mkdir(parents=True, exist_ok=True)
+        fh = logging.FileHandler(log_path, encoding="utf-8")
+        fh.setLevel(logging.INFO)
+        fh.setFormatter(fmt)
+        logger.addHandler(fh)
+        log.info("=== run start (dry_run=%s, notify_now=%s) ===", args.dry_run, args.notify_now)
+    except OSError as exc:
+        log.warning("could not open log file %s: %s", log_path, exc)
+
     only = {s.strip() for s in args.only.split(",") if s.strip()} or None
 
     # Roster: prefer live ESPN pull, fall back to config roster.
@@ -173,11 +194,20 @@ def main(argv: list[str] | None = None) -> int:
             if changes:
                 title += f", {len(changes)} change(s)"
         body = digest.short()
+        provider = "stub" if args.dry_run else config.notify.provider
         notifier = make_notifier(config.notify, dry_run=args.dry_run)
         try:
             notifier.send(title, body, url="https://sleeper.com/")
+            log.info("notification sent via %s: %s", provider, title)
         except Exception as exc:  # noqa: BLE001 — never let notify failure crash the run
-            log.error("notification failed: %s", exc)
+            log.error("notification FAILED via %s: %s", provider, exc)
+            print(f"  notification failed via {provider}: {exc}")
+
+    log.info(
+        "run complete: %d issue(s), %d lineup-action(s), %d change(s), unavailable=%s",
+        len(digest.problems()), len(digest.lineup_actions()), len(changes),
+        ",".join(digest.unavailable_sources) or "none",
+    )
 
     if not args.dry_run or args.save_state:
         state.save(digest)

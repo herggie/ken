@@ -61,9 +61,11 @@ class NtfyNotifier(Notifier):
             headers["Authorization"] = f"Bearer {token}"
         if url:
             headers["Click"] = url
+        log.info("ntfy POST -> %s (topic=%s)", endpoint, topic)
         resp = requests.post(endpoint, data=body.encode("utf-8"), headers=headers, timeout=15)
-        resp.raise_for_status()
-        log.info("ntfy delivered to %s", endpoint)
+        if resp.status_code >= 400:
+            raise RuntimeError(f"ntfy returned HTTP {resp.status_code}: {resp.text[:200]}")
+        log.info("ntfy delivered (HTTP %s) to topic %s", resp.status_code, topic)
 
 
 class GithubNotifier(Notifier):

@@ -146,6 +146,18 @@ On a run with changes, the digest is posted as a comment on PR #1; the watching
 Claude session is woken by that comment and can respond. (For phone alerts
 instead, use `NOTIFY_PROVIDER=ntfy` with an `NTFY_TOPIC`.)
 
+## Logs & troubleshooting
+
+Every run appends to **`.state/monitor.log`** (override with `--log-file`):
+run start, each source, the notification outcome, and a completion summary.
+Notification failures also print to the console. To debug a push that didn't
+arrive, run with `-v` and check the log for the ntfy line:
+
+- `ntfy delivered (HTTP 200) to topic <x>` → the send worked; the problem is
+  the phone app's subscription/permissions (subscribe to the **exact** topic).
+- `notification FAILED via ntfy: ...` → the send itself failed; the message
+  says why (bad topic, network, auth).
+
 ## Scheduler
 
 ### Primary: GitHub Actions (runs without your PC on)
