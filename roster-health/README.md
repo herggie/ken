@@ -143,7 +143,7 @@ One adapter = one file = one responsibility. That's it.
 |---|---|
 | 1. Skeleton + README | ✅ |
 | 2. `sleeper.py` + normalizer + `id_crosswalk.py` | ✅ |
-| 3. `espn_roster.py` (roster pull) | ⏳ stubbed — **needs your league_id / team_id / SWID / espn_s2** |
+| 3. `espn_roster.py` (roster pull) | ✅ implemented — **set league_id / team_id / SWID / espn_s2 (env) to activate**; falls back to config roster |
 | 4. `nfl_official` / `nfl_inactives` / `team_sites` / `espn_public` / `news_rss` | ⏳ stubbed |
 | 5. `reconcile.py` + `notify.py` (ntfy) + last-run diff | ✅ |
 | 6. GitHub Actions + local cron docs | ✅ |
@@ -151,10 +151,11 @@ One adapter = one file = one responsibility. That's it.
 
 ### Next step
 
-Send me your **league id, team id, and the `SWID` / `espn_s2` cookies** and I'll
-wire the live ESPN roster pull (deliverable #3), then add the official sources
-one at a time so reconcile gets a real source-of-truth tier to compare Sleeper
-against.
+The ESPN roster pull is wired — set `ESPN_LEAGUE_ID` / `ESPN_TEAM_ID` /
+`ESPN_SWID` / `ESPN_S2` (env or GH secrets) to activate it; until then the
+config roster is used. Next is the official-tier sources (`nfl_official`,
+`nfl_inactives`, `team_sites`), added one at a time so reconcile gets a real
+source-of-truth tier to compare Sleeper against.
 
 ## Layout
 
@@ -170,7 +171,7 @@ roster-health/
 ├── sources/
 │   ├── base.py          # polite cached HTTP session + fetch_guard
 │   ├── sleeper.py       # ✅ implemented (cross-check tier)
-│   ├── espn_roster.py   # roster source (stub, needs cookies)
+│   ├── espn_roster.py   # ✅ roster source (needs ESPN cookies via env)
 │   └── ...              # official/cross-check stubs
 ├── fixtures/            # offline sample data for dev/CI
 ├── config.yaml          # roster + settings (tracked; NO secrets)
