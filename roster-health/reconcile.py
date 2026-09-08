@@ -79,6 +79,30 @@ class PlayerReport(BaseModel):
         )
 
     @property
+    def ir_eligible(self) -> bool:
+        """On the roster with an IR designation but NOT yet in an IR slot —
+        move to IR to free a roster spot."""
+        return self.status == Status.IR and self.entry.slot.upper() != "IR"
+
+    @property
+    def ir_returning(self) -> bool:
+        """Sitting in your IR slot but no longer carrying an IR designation —
+        the NFL activated them, so you must clear the IR slot."""
+        return self.entry.slot.upper() == "IR" and self.status != Status.IR
+
+    def ir_line(self) -> str:
+        if self.ir_returning:
+            return (
+                f"🔔 OFF IR: {self.entry.name} ({self.entry.team} {self.entry.position}) "
+                f"is now {self.status.value} — activate him and clear the IR slot"
+            )
+        add = f" — bench cover: {self.recommended_replacement}" if self.recommended_replacement else ""
+        return (
+            f"🅸 MOVE TO IR: {self.entry.name} ({self.entry.team} {self.entry.position}) "
+            f"is {self.status.value} — frees a roster spot{add}"
+        )
+
+    @property
     def recommended_replacement(self) -> Optional[str]:
         """Best healthy (Active) bench option — the top-ranked one with no tag."""
         for b in self.bench_options:
@@ -140,6 +164,13 @@ class Digest(BaseModel):
         """Starters you must not leave in your lineup (Out / IR / Doubtful)."""
         return [r for r in self.reports if r.lineup_problem]
 
+    def ir_moves(self) -> dict[str, list[PlayerReport]]:
+        """IR housekeeping: who to place on IR, and who just came off it."""
+        return {
+            "returning": [r for r in self.reports if r.ir_returning],
+            "eligible": [r for r in self.reports if r.ir_eligible],
+        }
+
     def render(self) -> str:
         lines = [
             f"Roster Health — {self.generated_at.strftime('%Y-%m-%d %H:%M UTC')}",
@@ -157,6 +188,14 @@ class Digest(BaseModel):
             for r in actions:
                 lines.append("  " + r.action_line())
             lines.append("")
+        ir = self.ir_moves()
+        if ir["returning"] or ir["eligible"]:
+            lines.append("IR MOVES:")
+            for r in ir["returning"]:
+                lines.append("  " + r.ir_line())
+            for r in ir["eligible"]:
+                lines.append("  " + r.ir_line())
+            lines.append("")
         for r in self.reports:
             lines.append("  " + r.one_liner())
         return "\n".join(lines)
@@ -165,12 +204,19 @@ class Digest(BaseModel):
         """One-screen push body: lineup actions first, then the rest of the watch list."""
         actions = self.lineup_actions()
         probs = self.problems()
-        if not actions and not probs:
+        ir = self.ir_moves()
+        if not actions and not probs and not ir["returning"] and not ir["eligible"]:
             return "All clear — no roster health issues."
         out: list[str] = []
         if actions:
             out.append("LINEUP ACTIONS — fix before kickoff:")
             out.extend(r.action_line() for r in actions)
+        ir = self.ir_moves()
+        if ir["returning"] or ir["eligible"]:
+            if out:
+                out.append("")
+            out.append("IR MOVES:")
+            out.extend(r.ir_line() for r in ir["returning"] + ir["eligible"])
         watch = [r for r in probs if not r.lineup_problem]
         if watch:
             if out:
@@ -317,7 +363,7 @@ def reconcile(
         for r in reports
     }
     for r in reports:
-        if r.entry.is_starter and r.has_alert:
+        if (r.entry.is_starter and r.has_alert) or r.ir_eligible or r.ir_returning:
             r.bench_options = _bench_options(r.entry, reports_by_key, config)
 
     reports.sort(key=lambda r: r._sort_key)

@@ -39,6 +39,19 @@ def _section(title: str) -> str:
     return f"\n{title}\n{'-' * len(title)}"
 
 
+def _market(records, position: str, roster_names: set[str], limit: int = 5):
+    """Candidate NFL starters at a position who aren't on the roster."""
+    cands = [
+        rec for rec in records
+        if (rec.position or "").upper() == position.upper()
+        and rec.status == Status.ACTIVE
+        and normalize_name(rec.player_name) not in roster_names
+        and rec.role_note and rec.role_note.endswith("starter")
+    ]
+    cands.sort(key=lambda rec: rec.player_name)
+    return cands[:limit]
+
+
 def build_report(config: Config) -> str:
     session = PoliteSession(config)
     res = sleeper.fetch(config, session)
@@ -112,18 +125,25 @@ def build_report(config: Config) -> str:
         out.append("   ✅ No urgent holes — your Out starters have healthy bench cover.")
     else:
         for pos, who in needs.items():
-            cands = [
-                rec for rec in records
-                if (rec.position or "").upper() == pos
-                and rec.status == Status.ACTIVE
-                and normalize_name(rec.player_name) not in roster_names
-                and rec.role_note and rec.role_note.endswith("starter")
-            ]
-            cands.sort(key=lambda rec: rec.player_name)
-            names = ", ".join(f"{c.player_name} ({c.team})" for c in cands[:5]) or "none found"
+            cands = _market(records, pos, roster_names)
+            names = ", ".join(f"{c.player_name} ({c.team})" for c in cands) or "none found"
             out.append(f"   {pos} (need: {who} is out, no bench cover) → look at: {names}")
         out.append("     (candidates are NFL starters not on your roster — verify they're")
         out.append("      actually free in your league; true availability needs the ESPN pull)")
+
+    # ---- 4. IR MANAGEMENT ------------------------------------------------
+    out.append(_section("4) IR MANAGEMENT"))
+    ir = digest.ir_moves()
+    if not ir["returning"] and not ir["eligible"]:
+        out.append("   ✅ Nothing to do — no IR returns and no IR-eligible players.")
+    else:
+        for r in ir["returning"]:
+            out.append("   " + r.ir_line())
+        for r in ir["eligible"]:
+            out.append("   " + r.ir_line())
+            pickups = _market(records, r.entry.position, roster_names)
+            names = ", ".join(f"{c.player_name} ({c.team})" for c in pickups) or "none found"
+            out.append(f"        fill the freed spot from waivers ({r.entry.position}): {names}")
 
     out.append("\n" + RULE)
     return "\n".join(out)
@@ -132,6 +152,8 @@ def build_report(config: Config) -> str:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Comprehensive weekly fantasy report")
     parser.add_argument("--config", type=Path, default=Path("config.yaml"))
+    parser.add_argument("--push", action="store_true",
+                        help="also send the report to your phone via the configured notifier")
     parser.add_argument("-v", "--verbose", action="store_true")
     args = parser.parse_args(argv)
 
@@ -141,7 +163,17 @@ def main(argv: list[str] | None = None) -> int:
         stream=sys.stderr,
     )
     config = load_config(args.config)
-    print(build_report(config))
+    report = build_report(config)
+    print(report)
+
+    if args.push:
+        from notify import make_notifier
+        notifier = make_notifier(config.notify, dry_run=False)
+        try:
+            notifier.send("📋 Weekly Fantasy Report", report, url="https://sleeper.com/")
+            print("\n(report pushed via %s)" % config.notify.provider)
+        except Exception as exc:  # noqa: BLE001
+            print(f"\n(push failed via {config.notify.provider}: {exc})")
     return 0
 
 

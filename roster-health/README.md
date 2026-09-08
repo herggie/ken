@@ -158,7 +158,7 @@ One comprehensive, easy-to-read readout of your whole team:
 python report.py --config config.yaml
 ```
 
-Three sections in one view:
+Four sections in one view:
 1. **Lineup (start/sit)** — who not to start + the best replacement, plus a
    Questionable watch list.
 2. **Bye-week conflicts** — upcoming weeks where 2+ starters are off, so you can
@@ -166,6 +166,14 @@ Three sections in one view:
 3. **Waiver ideas** — positions where an Out starter has no healthy bench cover,
    with candidate NFL starters to look for (true league availability needs the
    ESPN pull).
+4. **IR management** — players you should move to an IR slot (frees a roster
+   spot; shows the bench cover + a waiver pickup for the freed spot), and
+   players who've come **off** IR and must be activated.
+
+**Get it on your phone:** `python report.py --config config.yaml --push` sends
+the whole report through your notifier (ntfy). The `roster-report` GitHub
+Actions workflow does this automatically every Sunday morning. IR returns and
+"move to IR" nudges also ride along in the monitor's regular change alerts.
 
 ## Trade validator
 
