@@ -80,6 +80,7 @@ class StatusRecord(BaseModel):
     player_id_sleeper: Optional[str] = None
     position: Optional[str] = None
     role_note: Optional[str] = None        # depth-chart / usage note when available
+    bye_week: Optional[int] = None         # NFL bye week, when the source provides it
     raw: str = ""                          # original text, for auditing
     source: str = ""
     source_tier: SourceTier = SourceTier.CROSS_CHECK
@@ -180,6 +181,10 @@ class Config(BaseModel):
     roster: list[RosterEntry] = Field(default_factory=list)
     # Team sites to watch. Empty => derive from roster automatically.
     watch_teams: list[str] = Field(default_factory=list)
+    # Optional manual bye-week table (TEAM -> week) used when the live feed
+    # doesn't carry byes. Flag a week when this many starters are off:
+    bye_weeks: dict[str, int] = Field(default_factory=dict)
+    bye_conflict_threshold: int = 2
     notify: NotifyConfig = Field(default_factory=NotifyConfig)
     politeness: PolitenessConfig = Field(default_factory=PolitenessConfig)
     sources: dict[str, SourceToggle] = Field(default_factory=dict)

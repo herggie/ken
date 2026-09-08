@@ -80,6 +80,7 @@ def fetch(config: Config, session: PoliteSession) -> SourceResult:
         if p.get("injury_notes"):
             raw_bits.append(str(p["injury_notes"]))
         espn_id = p.get("espn_id")
+        bye = p.get("bye_week")
         records.append(
             StatusRecord(
                 player_name=name,
@@ -89,6 +90,7 @@ def fetch(config: Config, session: PoliteSession) -> SourceResult:
                 player_id_sleeper=str(sleeper_id),
                 position=p.get("position"),
                 role_note=_role_note(p),
+                bye_week=int(bye) if isinstance(bye, (int, float)) else None,
                 raw=" — ".join(raw_bits),
                 source=SOURCE,
                 source_tier=TIER,

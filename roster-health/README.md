@@ -150,6 +150,23 @@ On a run with changes, the digest is posted as a comment on PR #1; the watching
 Claude session is woken by that comment and can respond. (For phone alerts
 instead, use `NOTIFY_PROVIDER=ntfy` with an `NTFY_TOPIC`.)
 
+## Weekly report
+
+One comprehensive, easy-to-read readout of your whole team:
+
+```bash
+python report.py --config config.yaml
+```
+
+Three sections in one view:
+1. **Lineup (start/sit)** — who not to start + the best replacement, plus a
+   Questionable watch list.
+2. **Bye-week conflicts** — upcoming weeks where 2+ starters are off, so you can
+   plan waivers/trades ahead (byes come from the feed or `config.bye_weeks`).
+3. **Waiver ideas** — positions where an Out starter has no healthy bench cover,
+   with candidate NFL starters to look for (true league availability needs the
+   ESPN pull).
+
 ## Trade validator
 
 Got a trade offer? Fact-check it before you accept:
