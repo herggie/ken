@@ -36,3 +36,13 @@ jobs:
           NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
           NTFY_TOKEN: ${{ secrets.NTFY_TOKEN }}
         run: python report.py --config config.yaml --push -v
+
+      - name: Push start/sit
+        env:
+          ESPN_SWID: ${{ secrets.ESPN_SWID }}
+          ESPN_S2: ${{ secrets.ESPN_S2 }}
+          ESPN_LEAGUE_ID: ${{ secrets.ESPN_LEAGUE_ID }}
+          ESPN_TEAM_ID: ${{ secrets.ESPN_TEAM_ID }}
+          NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
+          NTFY_TOKEN: ${{ secrets.NTFY_TOKEN }}
+        run: python startsit.py --config config.yaml --push -v

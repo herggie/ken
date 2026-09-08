@@ -176,6 +176,33 @@ the whole report through your notifier (ntfy). The `roster-report` GitHub
 Actions workflow does this automatically every Sunday morning. IR returns and
 "move to IR" nudges also ride along in the monitor's regular change alerts.
 
+## Start/Sit analyzer
+
+Weekly lineup decisions:
+
+```bash
+python startsit.py --config config.yaml          # add --push to send to phone
+```
+
+With **ESPN projections** (from the cookie pull) it runs a full **lineup
+optimizer**: it assigns your whole roster to the lineup slots to maximize
+projected points, benches injured players, and shows the highest-scoring legal
+lineup plus the exact START/SIT changes and the point gain vs. your current
+lineup:
+
+```
+OPTIMAL LINEUP (by projected points):
+  QB    Jayden Daniels ~21pts
+  ...
+  Projected total: 123 pts  (your current lineup ~91 → +32)
+  Make these changes:
+    ▶ START J.K. Dobbins        ◀ SIT Christian McCaffrey [Out]
+```
+
+Without projections it falls back to injury-only advice (sit Out/Doubtful
+starters for a healthy bench) and says so. The Sunday `roster-report` workflow
+pushes this to your phone alongside the report.
+
 ## Trade validator
 
 Got a trade offer? Fact-check it before you accept:
@@ -191,6 +218,14 @@ size** changes (so you know if you'll have to drop/add), and whether you're
 **acquiring or shipping a dinged player**. Names are fuzzy-matched; anything it
 can't find is listed, never silently dropped. It states facts, not a verdict —
 the value call stays yours (projection-based value needs the ESPN pull).
+
+Trades aren't always straight-up — add **FAAB/money** and/or **draft picks** on
+either side and they're factored into the summary (net FAAB, pick-count delta):
+
+```bash
+python trade.py --give "Saquon Barkley" --get "Malik Nabers" \
+    --get-faab 15 --give-picks "2027 1st, 2027 3rd"
+```
 
 ## Logs & troubleshooting
 
