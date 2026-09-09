@@ -55,7 +55,10 @@ class NtfyNotifier(Notifier):
                 "(letters, digits, - and _ only), e.g. 'starter-changes-9f3k2x'"
             )
         endpoint = f"{self.config.ntfy_server.rstrip('/')}/{topic}"
-        headers = {"Title": title, "Priority": self.config.priority}
+        # HTTP headers must be latin-1; the Title can't carry emoji, so strip any
+        # non-ASCII from it (the emoji-rich content still rides in the body).
+        safe_title = title.encode("ascii", "ignore").decode("ascii").strip() or "Roster Health"
+        headers = {"Title": safe_title, "Priority": self.config.priority}
         token = os.environ.get("NTFY_TOKEN")
         if token:
             headers["Authorization"] = f"Bearer {token}"
