@@ -65,7 +65,9 @@ def optimize(roster: list[RosterEntry], st: dict, config: Config):
             continue
         pool = sorted(
             (p for p in startable if p.position.upper() == slot and id(p) not in used),
-            key=lambda p: -(p.projection or 0.0),
+            # higher projection first; on ties keep the current starter (no
+            # pointless swaps, e.g. two unprojected D/STs)
+            key=lambda p: (-(p.projection or 0.0), 0 if p.is_starter else 1),
         )
         for p in pool[:n]:
             chosen.append((slot, p))
@@ -74,7 +76,7 @@ def optimize(roster: list[RosterEntry], st: dict, config: Config):
     for _ in range(slot_counts.get("FLEX", 0)):
         pool = sorted(
             (p for p in startable if p.position.upper() in _FLEX_ELIGIBLE and id(p) not in used),
-            key=lambda p: -(p.projection or 0.0),
+            key=lambda p: (-(p.projection or 0.0), 0 if p.is_starter else 1),
         )
         if pool:
             chosen.append(("FLEX", pool[0]))
