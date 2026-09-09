@@ -149,13 +149,23 @@ def fetch_free_agents(config: Config, size: int = 75) -> list[FreeAgent] | None:
         agents = league.free_agents(size=size)  # ESPN returns these projection-ranked
         out: list[FreeAgent] = []
         for p in agents:
-            position = _POS_MAP.get(getattr(p, "position", ""), getattr(p, "position", ""))
+            # espn-api attribute types drift across players (position can come
+            # back as a list), so coerce every field defensively to str/None.
+            raw_pos = getattr(p, "position", None)
+            if isinstance(raw_pos, list):
+                raw_pos = raw_pos[0] if raw_pos else ""
+            raw_pos = raw_pos if isinstance(raw_pos, str) else ""
+            position = _POS_MAP.get(raw_pos, raw_pos) or "?"
+            team = getattr(p, "proTeam", None)
+            team = team if isinstance(team, str) else None
+            inj = getattr(p, "injuryStatus", None)
+            inj = inj if isinstance(inj, str) else None
             out.append(
                 FreeAgent(
-                    name=p.name,
-                    team=canonical_team(getattr(p, "proTeam", None)),
-                    position=position or "?",
-                    status=normalize_status(getattr(p, "injuryStatus", None)),
+                    name=str(getattr(p, "name", "") or "?"),
+                    team=canonical_team(team),
+                    position=position,
+                    status=normalize_status(inj),
                     projection=_projection(p),
                 )
             )
