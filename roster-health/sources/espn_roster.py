@@ -61,18 +61,30 @@ def _map_slot(lineup_slot: str) -> str:
     return slot
 
 
-def _projection(player) -> float | None:
-    """Best-effort ESPN projected points for ranking bench options.
-
-    espn-api exposes a per-game average projection on the Player object; fall
-    back to the season total. Attribute names have drifted across versions, so
-    probe defensively and return None if nothing usable is present.
-    """
+def _season_avg_projection(player) -> float | None:
+    """Season-average projection — fallback only (does NOT match ESPN's weekly)."""
     for attr in ("projected_avg_points", "projected_total_points", "projected_points"):
         val = getattr(player, attr, None)
         if isinstance(val, (int, float)) and val > 0:
             return float(val)
     return None
+
+
+def _projection(player, week: int | None = None) -> float | None:
+    """ESPN projected points for the CURRENT WEEK (to match the team page's
+    PROJ column). ``player.stats[week]['projected_points']`` is the weekly
+    number; fall back to the season average only when the weekly value is
+    unavailable. A weekly projection of 0 (bye/DST) is a real value and kept.
+    """
+    if week is not None:
+        stats = getattr(player, "stats", None)
+        if isinstance(stats, dict):
+            wk = stats.get(week) or stats.get(str(week))
+            if isinstance(wk, dict):
+                pp = wk.get("projected_points")
+                if isinstance(pp, (int, float)):
+                    return float(pp)
+    return _season_avg_projection(player)
 
 
 def fetch_roster(config: Config) -> list[RosterEntry] | None:
@@ -105,6 +117,7 @@ def fetch_roster(config: Config) -> list[RosterEntry] | None:
             )
             return None
 
+        week = getattr(league, "current_week", None)
         entries: list[RosterEntry] = []
         for p in team.roster:
             position = _POS_MAP.get(getattr(p, "position", ""), getattr(p, "position", ""))
@@ -115,7 +128,7 @@ def fetch_roster(config: Config) -> list[RosterEntry] | None:
                     position=position or "UNK",
                     slot=_map_slot(getattr(p, "lineupSlot", "BE")),
                     player_id_espn=str(p.playerId) if getattr(p, "playerId", None) else None,
-                    projection=_projection(p),
+                    projection=_projection(p, week),
                 )
             )
         log.info("pulled %d players from ESPN team %s", len(entries), espn.team_id)
@@ -147,6 +160,7 @@ def fetch_free_agents(config: Config, size: int = 75) -> list[FreeAgent] | None:
             espn_s2=espn_s2, swid=swid,
         )
         agents = league.free_agents(size=size)  # ESPN returns these projection-ranked
+        week = getattr(league, "current_week", None)
         out: list[FreeAgent] = []
         for p in agents:
             # espn-api attribute types drift across players (position can come
@@ -166,7 +180,7 @@ def fetch_free_agents(config: Config, size: int = 75) -> list[FreeAgent] | None:
                     team=canonical_team(team),
                     position=position,
                     status=normalize_status(inj),
-                    projection=_projection(p),
+                    projection=_projection(p, week),
                 )
             )
         log.info("pulled %d free agents from ESPN league %s", len(out), espn.league_id)
