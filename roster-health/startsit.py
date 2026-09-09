@@ -53,10 +53,9 @@ def optimize(roster: list[RosterEntry], st: dict, config: Config):
     from the remaining RB/WR/TE. Optimal for standard lineups (only FLEX has
     overlapping eligibility). Returns (chosen [(slot, player)], used id set).
     """
-    startable = [
-        r for r in roster
-        if st[id(r)] not in _UNAVAILABLE and r.projection is not None
-    ]
+    # Include players even when a projection is missing (e.g. ESPN doesn't
+    # project D/ST) so their slot still fills — they just rank last (0.0).
+    startable = [r for r in roster if st[id(r)] not in _UNAVAILABLE]
     slot_counts = Counter(s.slot.upper() for s in config.starters)
     chosen: list[tuple[str, RosterEntry]] = []
     used: set[int] = set()
