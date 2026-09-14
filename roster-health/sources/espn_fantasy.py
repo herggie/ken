@@ -102,6 +102,17 @@ def _stat_label(stat_id: int) -> str:
     return _STAT_LABEL.get(stat_id, f"stat{stat_id}")
 
 
+def _as_int(value: Any) -> Optional[int]:
+    """Coerce a possibly-stringified integer to int, else None. ESPN mostly
+    sends numeric ids as ints but occasionally as strings; scoringPeriodId in
+    particular must match reliably or a player wrongly reads as 'no projection'.
+    """
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
 # --------------------------------------------------------------------------- #
 # Scoring rulebook
 # --------------------------------------------------------------------------- #
@@ -117,17 +128,19 @@ class ScoringRules:
     default: dict[int, float] = field(default_factory=dict)
     overrides: dict[int, dict[int, float]] = field(default_factory=dict)
 
-    def points_for(self, stat_id: int, position_id: int | None) -> float:
-        if position_id is not None:
+    def points_for(self, stat_id: int, slot_id: int | None) -> float:
+        # pointsOverrides are keyed by lineup-slot id, so slot_id must be a
+        # slot id (see _DEFPOS_TO_SLOT), not a raw defaultPositionId.
+        if slot_id is not None:
             ov = self.overrides.get(stat_id)
-            if ov and position_id in ov:
-                return ov[position_id]
+            if ov and slot_id in ov:
+                return ov[slot_id]
         return self.default.get(stat_id, 0.0)
 
-    def score(self, stat_line: dict[int, float], position_id: int | None) -> float:
+    def score(self, stat_line: dict[int, float], slot_id: int | None) -> float:
         """Dot-product the raw stat line against the rulebook."""
         return sum(
-            value * self.points_for(stat_id, position_id)
+            value * self.points_for(stat_id, slot_id)
             for stat_id, value in stat_line.items()
         )
 
@@ -145,7 +158,7 @@ class PlayerProjection:
     name: str
     position: str
     week: int
-    position_id: Optional[int] = None
+    slot_id: Optional[int] = None   # lineup-slot id (for pointsOverrides resolution)
     stat_line: dict[int, float] = field(default_factory=dict)  # raw projected stats
     computed_points: Optional[float] = None   # OUR Σ from the league rulebook
     espn_points: Optional[float] = None        # ESPN's own appliedTotal (for cross-check)
@@ -166,7 +179,7 @@ class PlayerProjection:
         """Human-readable 'where the points come from', biggest contributors first."""
         parts = []
         for stat_id, value in self.stat_line.items():
-            pts = value * scoring.points_for(stat_id, self.position_id)
+            pts = value * scoring.points_for(stat_id, self.slot_id)
             if abs(pts) >= 0.05:
                 parts.append((pts, f"{_stat_label(stat_id)} {value:g}→{pts:+.1f}"))
         parts.sort(key=lambda t: -abs(t[0]))
@@ -250,10 +263,7 @@ def _projected_stat_line(player: dict, week: int, year: int) -> dict[int, float]
     scoring period. Prefer a week-specific entry; fall back to the season
     projection split if no weekly one is present.
     """
-    entries = player.get("stats") or []
-    weekly = None
-    season = None
-    for e in entries:
+    for e in player.get("stats") or []:
         if not isinstance(e, dict):
             continue
         if e.get("statSourceId") != _STAT_SOURCE_PROJECTED:
@@ -265,22 +275,21 @@ def _projected_stat_line(player: dict, week: int, year: int) -> dict[int, float]
         stats = e.get("stats")
         if not isinstance(stats, dict) or not stats:
             continue
-        if e.get("scoringPeriodId") == week:
-            weekly = e
-            break
-        # scoringPeriodId 0 == whole-season projection; keep as fallback.
-        if season is None and e.get("scoringPeriodId") == 0:
-            season = e
-    chosen = weekly or season
-    if not chosen:
-        return {}
-    out: dict[int, float] = {}
-    for k, v in chosen["stats"].items():
-        try:
-            out[int(k)] = float(v)
-        except (TypeError, ValueError):
+        # ONLY the entry for this exact week is a weekly projection. A season
+        # split (scoringPeriodId 0) carries season *totals*; scoring those as a
+        # weekly number would be ~15x too high. We deliberately do NOT fall back
+        # to it — no weekly entry means "not posted yet" (an honest None
+        # upstream), never a fabricated number.
+        if _as_int(e.get("scoringPeriodId")) != week:
             continue
-    return out
+        out: dict[int, float] = {}
+        for k, v in stats.items():
+            try:
+                out[int(k)] = float(v)
+            except (TypeError, ValueError):
+                continue
+        return out
+    return {}
 
 
 def _espn_applied_total(player: dict, week: int) -> Optional[float]:
@@ -292,7 +301,7 @@ def _espn_applied_total(player: dict, week: int) -> Optional[float]:
             continue
         if e.get("statSplitTypeId") == 2:
             continue
-        if e.get("scoringPeriodId") == week:
+        if _as_int(e.get("scoringPeriodId")) == week:
             total = e.get("appliedTotal")
             if isinstance(total, (int, float)):
                 return float(total)
@@ -312,7 +321,7 @@ def _build_projection(player: dict, scoring: ScoringRules, week: int, year: int)
         player_id=str(player.get("id", "")),
         name=str(player.get("fullName") or player.get("name") or "?"),
         position=_POSITION_ID.get(pos_id, "?") if pos_id is not None else "?",
-        position_id=slot_id,
+        slot_id=slot_id,
         week=week,
         stat_line=stat_line,
         computed_points=round(computed, 2) if computed is not None else None,
@@ -337,18 +346,19 @@ _CACHE: dict[tuple, Any] = {}
 
 
 def _current_week(config: Config, base_json: dict | None = None) -> Optional[int]:
-    if base_json and isinstance(base_json.get("scoringPeriodId"), int):
-        return base_json["scoringPeriodId"]
+    if base_json is not None:
+        wk = _as_int(base_json.get("scoringPeriodId"))
+        if wk is not None:
+            return wk
     try:
         data = _api_get(config, ["mStatus"])
     except Exception:  # noqa: BLE001
         return None
-    wk = data.get("scoringPeriodId")
-    if isinstance(wk, int):
+    wk = _as_int(data.get("scoringPeriodId"))
+    if wk is not None:
         return wk
     status = data.get("status") or {}
-    wk = status.get("latestScoringPeriod") or status.get("currentMatchupPeriod")
-    return int(wk) if isinstance(wk, (int, float)) else None
+    return _as_int(status.get("latestScoringPeriod") or status.get("currentMatchupPeriod"))
 
 
 def get_scoring(config: Config) -> Optional[ScoringRules]:
@@ -405,6 +415,7 @@ def projections_by_espn_id(
         if proj.player_id:
             out[proj.player_id] = proj
 
+    fa_ok = True
     if include_free_agents:
         try:
             # Weekly-projection stat id, e.g. week 7 of 2026 -> "1120267"
@@ -436,9 +447,14 @@ def projections_by_espn_id(
                     if proj.player_id and proj.player_id not in out:
                         out[proj.player_id] = proj
         except Exception as exc:  # noqa: BLE001
+            fa_ok = False
             log.warning("ESPN free-agent projection pull failed (%s); roster projections still returned", exc)
 
-    _CACHE[key] = out
+    # Cache only a complete result: never a sticky empty dict (a transient
+    # empty mRoster would otherwise poison later calls), and never a partial
+    # (FA pull failed) result under the FA-inclusive key.
+    if out and (not include_free_agents or fa_ok):
+        _CACHE[key] = out
     log.info("computed league-true projections for %d players (week %s)", len(out), wk)
     return out
 

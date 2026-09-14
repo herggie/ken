@@ -102,7 +102,7 @@ def rules_ppr() -> ScoringRules:
 
 def wr_player_with_projection() -> dict:
     """A WR (defaultPositionId 3) carrying an ACTUAL entry (ignored), a weekly
-    PROJECTED entry for week 5, and a season PROJECTED split (fallback).
+    PROJECTED entry for week 5, and a season PROJECTED split (never used weekly).
 
     Weekly projected stat line: 6 receptions, 88 rec yds, 1 rec TD.
     appliedTotal (ESPN's own number) = 19.5.
@@ -119,7 +119,8 @@ def wr_player_with_projection() -> dict:
                 "appliedTotal": 4.2,
                 "stats": {"53": 3, "42": 42, "43": 0},
             },
-            # Season projection split — only used as a fallback when no weekly.
+            # Season projection split — present but never used as a weekly
+            # projection (season totals are not a weekly number).
             {
                 "statSourceId": PROJECTED,
                 "scoringPeriodId": 0,
@@ -321,7 +322,7 @@ def test_score_full_ppr_receiving_line():
     """
     rules = rules_ppr()
     stat_line = {53: 6, 42: 88, 43: 1}
-    assert rules.score(stat_line, position_id=3) == 20.8
+    assert rules.score(stat_line, slot_id=3) == 20.8
 
 
 def test_score_honors_position_override_qb_vs_rb():
@@ -333,20 +334,20 @@ def test_score_honors_position_override_qb_vs_rb():
     """
     rules = rules_ppr()
     stat_line = {24: 50, 25: 1}
-    assert rules.score(stat_line, position_id=1) == 9.0  # QB
-    assert rules.score(stat_line, position_id=2) == 11.0  # RB
+    assert rules.score(stat_line, slot_id=1) == 9.0  # QB
+    assert rules.score(stat_line, slot_id=2) == 11.0  # RB
 
 
 def test_score_ignores_unknown_stats():
     """Unknown statIds contribute 0 and don't blow up the sum."""
     rules = rules_ppr()
     # 53 receptions counts (1.0 each); 9999 is unknown (0.0).
-    assert rules.score({53: 4, 9999: 100}, position_id=3) == 4.0
+    assert rules.score({53: 4, 9999: 100}, slot_id=3) == 4.0
 
 
 def test_score_empty_stat_line_is_zero():
     """An empty stat line scores exactly 0.0."""
-    assert rules_ppr().score({}, position_id=3) == 0.0
+    assert rules_ppr().score({}, slot_id=3) == 0.0
 
 
 # --------------------------------------------------------------------------- #
@@ -376,22 +377,42 @@ def test_projected_stat_line_ignores_actual_entries():
     assert _projected_stat_line(player, week=5, year=YEAR) == {}
 
 
-def test_projected_stat_line_falls_back_to_season_split():
-    """With no weekly projection, the season projection split is used."""
+def test_projected_stat_line_does_not_fall_back_to_season_split():
+    """A season split (scoringPeriodId 0) carries season *totals*, not a weekly
+    projection — scoring it as a weekly number would be ~15x too high. With no
+    weekly entry we return {} (an honest 'no projection posted' upstream),
+    never the season totals.
+    """
     player = {
         "id": 1,
         "defaultPositionId": 3,
         "stats": [
             {
                 "statSourceId": PROJECTED,
-                "scoringPeriodId": 0,
+                "scoringPeriodId": 0,   # whole-season split
                 "seasonId": YEAR,
                 "stats": {"53": "90", "42": "1200"},
             }
         ],
     }
-    # Week 5 has no weekly projection -> fall back to the season split.
-    assert _projected_stat_line(player, week=5, year=YEAR) == {53: 90.0, 42: 1200.0}
+    # Week 5 has no weekly projection -> {}, NOT the season totals.
+    assert _projected_stat_line(player, week=5, year=YEAR) == {}
+
+
+def test_projected_stat_line_matches_stringified_scoring_period():
+    """scoringPeriodId may arrive as a string; it must still match the week."""
+    player = {
+        "id": 1,
+        "defaultPositionId": 3,
+        "stats": [
+            {
+                "statSourceId": PROJECTED,
+                "scoringPeriodId": "5",   # stringified week
+                "stats": {"53": "6", "42": "88"},
+            }
+        ],
+    }
+    assert _projected_stat_line(player, week=5, year=YEAR) == {53: 6.0, 42: 88.0}
 
 
 def test_projected_stat_line_returns_empty_when_nothing_projected():
@@ -419,8 +440,8 @@ def test_projected_stat_line_coerces_and_skips_bad_pairs():
 
 
 def test_projected_stat_line_skips_projected_entry_with_empty_stats():
-    """A projected weekly entry with an empty stats map is not chosen; the
-    season fallback (if any) or {} is returned instead."""
+    """A projected weekly entry with an empty stats map is not chosen; {} is
+    returned (there is no season fallback)."""
     player = {
         "id": 1,
         "defaultPositionId": 3,
@@ -508,9 +529,9 @@ def test_build_projection_end_to_end_wr():
     assert proj.player_id == "3139477"
     assert proj.name == "Test Wideout"
     assert proj.position == "WR"
-    # position_id is the *lineup-slot* id (WR=4), converted from defaultPositionId
+    # slot_id is the *lineup-slot* id (WR=4), converted from defaultPositionId
     # (WR=3) so pointsOverrides (keyed by slot id) resolve correctly.
-    assert proj.position_id == 4
+    assert proj.slot_id == 4
     assert proj.week == 5
     assert proj.stat_line == {53: 6.0, 42: 88.0, 43: 1.0}
     assert proj.computed_points == 20.8
@@ -524,7 +545,7 @@ def test_build_projection_dst_no_projection_is_honest_none():
     """A D/ST with only actual data reports 'no projection' -- never a fake 0."""
     proj = _build_projection(dst_player_actual_only(), rules_ppr(), week=5, year=YEAR)
     assert proj.position == "DST"
-    assert proj.position_id == 16
+    assert proj.slot_id == 16
     assert proj.stat_line == {}
     assert proj.computed_points is None
     assert proj.espn_points is None
@@ -547,7 +568,7 @@ def test_build_projection_uses_name_fallback_and_unknown_position():
     proj = _build_projection(player, rules_ppr(), week=5, year=YEAR)
     assert proj.name == "Fallback Name"
     assert proj.position == "?"
-    assert proj.position_id is None
+    assert proj.slot_id is None
     # 3 receptions * 1.0 = 3.0 computed; espn = 3.0
     assert proj.computed_points == 3.0
     assert proj.espn_points == 3.0
@@ -563,8 +584,8 @@ def test_build_projection_computed_none_when_rules_not_usable():
     assert proj.points == 19.5  # falls back to ESPN's number
 
 
-def test_build_projection_position_id_is_lineup_slot():
-    """position_id carries the lineup-SLOT id derived from defaultPositionId.
+def test_build_projection_slot_id_is_lineup_slot():
+    """slot_id carries the lineup-SLOT id derived from defaultPositionId.
 
     _DEFPOS_TO_SLOT: 1 QB->0, 2 RB->2, 3 WR->4, 4 TE->6, 5 K->17, 16 D/ST->16.
     The human-readable ``position`` label still reflects defaultPositionId.
@@ -587,7 +608,7 @@ def test_build_projection_position_id_is_lineup_slot():
         }
         proj = _build_projection(player, rules, week=5, year=YEAR)
         assert proj.position == label
-        assert proj.position_id == slot
+        assert proj.slot_id == slot
 
 
 def test_build_projection_override_resolves_via_slot_id():
@@ -721,7 +742,7 @@ def test_parse_scoring_then_score_integration():
     """
     rules = parse_scoring(scoring_items_ppr())
     qb_line = {3: 300, 4: 3, 24: 20, 25: 1}
-    assert rules.score(qb_line, position_id=1) == 30.0
+    assert rules.score(qb_line, slot_id=1) == 30.0
 
 
 # --------------------------------------------------------------------------- #
