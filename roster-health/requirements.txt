@@ -8,5 +8,10 @@ feedparser>=6.0
 beautifulsoup4>=4.12
 selectolax>=0.3
 
-# ESPN private-league roster pull (deliverable #3)
+# ESPN private-league roster pull (deliverable #3) + league-true projections
+# (sources/espn_fantasy.py talks to the ESPN Fantasy API directly for scoring,
+# and reuses these cookies; espn-api is still used for roster identity.)
 espn-api>=0.44
+
+# Dev / CI only — offline unit tests (tests/)
+pytest>=8.0

@@ -208,6 +208,44 @@ Without projections it falls back to injury-only advice (sit Out/Doubtful
 starters for a healthy bench) and says so. The Sunday `roster-report` workflow
 pushes this to your phone alongside the report.
 
+## League-true projections (`sources/espn_fantasy.py`)
+
+The generic numbers on espn.com don't follow *your* league's scoring — that's
+why they look skewed. The ESPN **Fantasy app**, though, runs on a separate
+private Fantasy API that scores everything with your league's exact rules. This
+module taps that backend and, rather than trusting whatever number ESPN
+displays, **re-scores each player from your league's own rulebook**:
+
+```
+projection = Σ  raw_projected_stat[statId] × your_league_points(statId, position)
+```
+
+It pulls your league's scoring settings (`scoringItems`: every stat → point
+value, with per-position overrides) and each player's raw projected stat line,
+then computes the total itself. The result is immune to ESPN's display skew and
+matches what your league actually awards. See it side-by-side:
+
+```bash
+python -m sources.espn_fantasy --config config.yaml        # add --push for phone
+```
+
+```
+League-true projections (computed from YOUR scoring rulebook)
+  Jayden Daniels (WSH QB): 21.4 pts (ESPN says 21.4)
+  Christian McCaffrey (SF RB): 18.9 pts (ESPN says 17.2)  ⚠ diff +1.7
+  Detroit Lions (DET DST): no projection posted yet
+  ...
+```
+
+Where the two disagree, trust the computed one — it follows your rulebook. Where
+ESPN simply hasn't posted a projection yet (classic for D/ST early in the week),
+it says so honestly instead of showing a fake 0. **These league-true numbers
+now feed the roster pull automatically**, so `startsit.py`, `report.py` and the
+monitor all optimize on them when ESPN cookies are set (falling back to ESPN's
+own total only when a projection is missing). Needs `ESPN_SWID` / `ESPN_S2` and
+the league id; runs on GitHub Actions (`espn-projections` workflow) where ESPN
+is reachable.
+
 ## Trade validator
 
 Got a trade offer? Fact-check it before you accept:
@@ -316,6 +354,7 @@ roster-health/
 │   ├── base.py          # polite cached HTTP session + fetch_guard
 │   ├── sleeper.py       # ✅ implemented (cross-check tier)
 │   ├── espn_roster.py   # ✅ roster source (needs ESPN cookies via env)
+│   ├── espn_fantasy.py  # ✅ league-true projections from YOUR scoring rulebook
 │   └── ...              # official/cross-check stubs
 ├── fixtures/            # offline sample data for dev/CI
 ├── config.yaml          # roster + settings (tracked; NO secrets)
