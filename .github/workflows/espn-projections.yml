@@ -23,6 +23,7 @@ on:
       - roster-health/sources/espn_fantasy.py
       - roster-health/sources/espn_roster.py
       - roster-health/analyze.py
+      - roster-health/actuals.py
       - .github/workflows/espn-projections.yml
   schedule:
     - cron: "30 13 * * 0"     # ~09:30 ET Sunday, just after roster-report
@@ -66,3 +67,12 @@ jobs:
           NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
           NTFY_TOKEN: ${{ secrets.NTFY_TOKEN }}
         run: python analyze.py --config config.yaml -v
+      - name: This week's actual scores
+        env:
+          ESPN_SWID: ${{ secrets.ESPN_SWID }}
+          ESPN_S2: ${{ secrets.ESPN_S2 }}
+          ESPN_LEAGUE_ID: ${{ secrets.ESPN_LEAGUE_ID }}
+          ESPN_TEAM_ID: ${{ secrets.ESPN_TEAM_ID }}
+          NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
+          NTFY_TOKEN: ${{ secrets.NTFY_TOKEN }}
+        run: python actuals.py --config config.yaml -v
