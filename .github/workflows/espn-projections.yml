@@ -13,6 +13,16 @@ on:
         description: "Scoring period / NFL week (blank = current)"
         required: false
         default: ""
+  # Also run on pushes to the dev branch that touch the projection code, so it
+  # can be exercised live against ESPN before this lands on the default branch
+  # (workflow_dispatch only works once a workflow is on the default branch).
+  push:
+    branches:
+      - claude/health-monitor-setup-wu7e0b
+    paths:
+      - roster-health/sources/espn_fantasy.py
+      - roster-health/sources/espn_roster.py
+      - .github/workflows/espn-projections.yml
   schedule:
     - cron: "30 13 * * 0"     # ~09:30 ET Sunday, just after roster-report
 
