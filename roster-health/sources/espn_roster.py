@@ -26,6 +26,7 @@ import os
 
 from models import Config, FreeAgent, RosterEntry
 from normalize import canonical_team, normalize_status
+from sources import espn_fantasy
 
 log = logging.getLogger("roster-health.espn_roster")
 
@@ -118,17 +119,28 @@ def fetch_roster(config: Config) -> list[RosterEntry] | None:
             return None
 
         week = getattr(league, "current_week", None)
+        wk = week if isinstance(week, int) else None
+        # League-true projections computed from YOUR scoring rulebook (Level 2).
+        # Prefer these over espn-api's per-player number; they follow the league's
+        # exact scoring and are immune to ESPN's display skew. None => fall back.
+        league_proj = espn_fantasy.projection_points(config, wk)
         entries: list[RosterEntry] = []
         for p in team.roster:
             position = _POS_MAP.get(getattr(p, "position", ""), getattr(p, "position", ""))
+            espn_id = str(p.playerId) if getattr(p, "playerId", None) else None
+            proj = None
+            if league_proj and espn_id and espn_id in league_proj:
+                proj = league_proj[espn_id]
+            if proj is None:
+                proj = _projection(p, week)
             entries.append(
                 RosterEntry(
                     name=p.name,
                     team=canonical_team(getattr(p, "proTeam", None)),
                     position=position or "UNK",
                     slot=_map_slot(getattr(p, "lineupSlot", "BE")),
-                    player_id_espn=str(p.playerId) if getattr(p, "playerId", None) else None,
-                    projection=_projection(p, week),
+                    player_id_espn=espn_id,
+                    projection=proj,
                 )
             )
         log.info("pulled %d players from ESPN team %s", len(entries), espn.team_id)
@@ -161,6 +173,8 @@ def fetch_free_agents(config: Config, size: int = 75) -> list[FreeAgent] | None:
         )
         agents = league.free_agents(size=size)  # ESPN returns these projection-ranked
         week = getattr(league, "current_week", None)
+        wk = week if isinstance(week, int) else None
+        league_proj = espn_fantasy.projection_points(config, wk)
         out: list[FreeAgent] = []
         for p in agents:
             # espn-api attribute types drift across players (position can come
@@ -174,13 +188,19 @@ def fetch_free_agents(config: Config, size: int = 75) -> list[FreeAgent] | None:
             team = team if isinstance(team, str) else None
             inj = getattr(p, "injuryStatus", None)
             inj = inj if isinstance(inj, str) else None
+            espn_id = str(getattr(p, "playerId", "")) or None
+            proj = None
+            if league_proj and espn_id and espn_id in league_proj:
+                proj = league_proj[espn_id]
+            if proj is None:
+                proj = _projection(p, week)
             out.append(
                 FreeAgent(
                     name=str(getattr(p, "name", "") or "?"),
                     team=canonical_team(team),
                     position=position,
                     status=normalize_status(inj),
-                    projection=_projection(p, week),
+                    projection=proj,
                 )
             )
         log.info("pulled %d free agents from ESPN league %s", len(out), espn.league_id)

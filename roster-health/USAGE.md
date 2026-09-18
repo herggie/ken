@@ -48,6 +48,20 @@ workflow on the left → **Run workflow**. Results push to your phone via ntfy.
 
 - **Result:** a push with each player's status/role + net FAAB + pick delta.
 
+### 5. `espn-projections` — league-TRUE projections (numbers you can trust)
+- **What it does:** pulls your league's *exact scoring rulebook* from the ESPN
+  Fantasy API and re-scores each starter's projected stat line itself — so the
+  points follow **your league**, not the generic (skewed) espn.com numbers.
+- **Inputs:** `week` (optional; blank = current week).
+- **Result:** a push listing each starter as `ours vs (ESPN says …)`, flagging
+  any line where they differ by ≥0.5 (`⚠ diff`). Where ESPN hasn't posted a
+  projection yet (typical for D/ST early in the week) it says "no projection
+  posted yet" instead of showing a fake 0.
+- Also runs itself Sunday ~09:30 ET, right after the weekly report.
+- **These same league-true numbers now feed `roster-report` and `roster-health`
+  automatically** — the optimizer and start/sit run on them when ESPN cookies
+  are set, falling back to ESPN's own number only if a projection is missing.
+
 ---
 
 ## Sample inputs to test each one right now
