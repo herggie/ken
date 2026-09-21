@@ -70,7 +70,7 @@ def build(config: Config) -> str:
     live = espn_roster.fetch_roster(config)
     roster = live if live is not None else list(config.roster)
     have_proj = any(_proj(r) is not None for r in roster)
-    free_agents = espn_roster.fetch_free_agents(config, size=200) or []
+    free_agents = espn_roster.fetch_free_agents(config, size=300) or []
     st = _status_lookup(config, roster)
 
     def flag(s: Status) -> str:
@@ -137,7 +137,9 @@ def build(config: Config) -> str:
             key=lambda f: -(_proj(f) or 0.0),
         )
         fa_by_pos[pos] = pool
-        top = pool[:5]
+        # Show a deeper list at TE so entrenched starters aren't buried behind
+        # a high-projection backup at the top of the position.
+        top = pool[:(12 if pos == "TE" else 5)]
         if top:
             out.append(f"   {pos}:")
             for f in top:
